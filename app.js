@@ -488,6 +488,7 @@ function extractName(text) {
 const LIVE_CONFIRMATIONS = 2;
 const LIVE_INTERVAL_MS = 250;
 const LIVE_CROP = { x: 0.08, y: 0.15, w: 0.84, h: 0.70 };
+const LIVE_ROTATION = 0;
 
 function getLiveConfig(state) {
   if (state === assetState) {
@@ -575,7 +576,7 @@ function flashScanSuccess() {
 function completeLiveScan(state, config, value, text) {
   const frame = captureVideoFrame(state);
   state.image = frame;
-  state.rotation = ROTATIONS[(state.liveRotationIndex + ROTATIONS.length - 1) % ROTATIONS.length];
+  state.rotation = LIVE_ROTATION;
   state.crop = null;
   document.getElementById(config.rawId).textContent = text.trim();
   document.getElementById(config.fieldId).value = value;
@@ -599,8 +600,7 @@ async function scanLiveFrame(state, config) {
   }
 
   state.liveBusy = true;
-  state.rotation = ROTATIONS[state.liveRotationIndex];
-  state.liveRotationIndex = (state.liveRotationIndex + 1) % ROTATIONS.length;
+  state.rotation = LIVE_ROTATION;
   state.crop = LIVE_CROP;
   const frame = captureVideoFrame(state);
   if (!frame) {

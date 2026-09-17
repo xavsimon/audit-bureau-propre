@@ -60,8 +60,9 @@ Deux façons simples de faire cela, au choix :
 ## Utilisation pendant l'audit
 
 1. **Étiquette d'asset** : démarrez le **scanner live**, placez l'étiquette dans le viseur et
-  maintenez le téléphone quelques instants. L'application essaie les 4 orientations et arrête la
-  caméra après deux lectures identiques. Le numéro détecté est pré-rempli — vérifiez-le toujours.
+  maintenez le téléphone quelques instants. L'image live est supposée être dans le bon sens et
+  la caméra s'arrête après deux lectures identiques. Le numéro détecté est pré-rempli — vérifiez-le
+  toujours.
   Le bouton **Photo étiquette** reste disponible comme solution de repli.
 2. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché,
   ou utilisez **Photo écran**. Le nom est pré-rempli automatiquement ; vérifiez/corrigez si besoin.
@@ -89,9 +90,9 @@ lang/             données de langue Tesseract (eng + fra), en local
 
 ## Limites connues
 
-- Le scanner live analyse une image à la fois, à intervalles courts, en faisant tourner les
-  4 orientations possibles. Il faut garder le texte dans le viseur et attendre deux lectures
-  identiques ; la toute première analyse est plus longue, le temps de charger le moteur OCR.
+- Le scanner live analyse une image à la fois, à intervalles courts, dans l'orientation normale.
+  Il faut garder le texte dans le viseur et attendre deux lectures identiques ; la toute première
+  analyse est plus longue, le temps de charger le moteur OCR.
 - La détection automatique sur photo (orientation + zone de texte) prend quelques secondes.
 - La reconnaissance du numéro d'asset et du nom est une **suggestion automatique** : relisez
   toujours les champs avant d'ajouter une entrée à la liste.
