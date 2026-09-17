@@ -59,8 +59,9 @@ Deux façons simples de faire cela, au choix :
 
 ## Utilisation pendant l'audit
 
-1. Renseignez **Étage**, **BU** et **Agence** en haut de l'écran. Ces valeurs restent présentes
-  d'un PC à l'autre et sont conservées localement.
+1. Renseignez **Étage**, **BU** et **Agence** en haut de l'écran. Elles restent préremplies d'un PC
+  à l'autre, mais vous pouvez les modifier avant chaque ajout : leurs valeurs sont conservées
+  séparément pour chaque PC et apparaissent dans l'export Excel.
 2. **Étiquette d'asset** : démarrez le **scanner live**, placez l'étiquette dans le viseur et
   maintenez le téléphone quelques instants. L'image live est supposée être dans le bon sens et
   la caméra s'arrête après deux lectures identiques. Le numéro détecté est pré-rempli — vérifiez-le

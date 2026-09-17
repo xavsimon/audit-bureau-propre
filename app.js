@@ -792,6 +792,26 @@ Object.entries(contextFieldMap).forEach(([fieldId, contextKey]) => {
 
 let entries = loadEntries();
 let editingIndex = null;
+let editingContextBackup = null;
+
+function getAuditContextFromFields() {
+  return {
+    etage: document.getElementById('fieldFloor').value.trim(),
+    bu: document.getElementById('fieldBu').value.trim(),
+    agence: document.getElementById('fieldAgency').value.trim(),
+  };
+}
+
+function setAuditContextFields(context) {
+  auditContext = {
+    etage: context.etage || '',
+    bu: context.bu || '',
+    agence: context.agence || '',
+  };
+  document.getElementById('fieldFloor').value = auditContext.etage;
+  document.getElementById('fieldBu').value = auditContext.bu;
+  document.getElementById('fieldAgency').value = auditContext.agence;
+}
 
 function renderTable() {
   const tbody = document.querySelector('#entryTable tbody');
@@ -827,9 +847,15 @@ document.querySelector('#entryTable tbody').addEventListener('click', (e) => {
     const idx = Number(editBtn.dataset.idx);
     const entry = entries[idx];
     if (!entry) return;
+    editingContextBackup = getAuditContextFromFields();
     editingIndex = idx;
     document.getElementById('fieldAsset').value = entry.asset;
     document.getElementById('fieldName').value = entry.nom;
+    setAuditContextFields({
+      etage: entry.etage || editingContextBackup.etage,
+      bu: entry.bu || editingContextBackup.bu,
+      agence: entry.agence || editingContextBackup.agence,
+    });
     document.getElementById('fieldRoom').value = entry.bureau;
     document.getElementById('fieldComment').value = entry.commentaire;
     document.getElementById('rawAsset').textContent = '';
@@ -851,7 +877,12 @@ document.querySelector('#entryTable tbody').addEventListener('click', (e) => {
 });
 
 function resetEntryForm() {
+  if (editingIndex !== null && editingContextBackup) {
+    setAuditContextFields(editingContextBackup);
+    saveAuditContext(auditContext);
+  }
   editingIndex = null;
+  editingContextBackup = null;
   document.getElementById('fieldAsset').value = '';
   document.getElementById('fieldName').value = '';
   document.getElementById('fieldComment').value = '';
@@ -866,11 +897,7 @@ document.getElementById('addEntry').addEventListener('click', () => {
   const nom = document.getElementById('fieldName').value.trim();
   const bureau = document.getElementById('fieldRoom').value.trim();
   const commentaire = document.getElementById('fieldComment').value.trim();
-  auditContext = {
-    etage: document.getElementById('fieldFloor').value.trim(),
-    bu: document.getElementById('fieldBu').value.trim(),
-    agence: document.getElementById('fieldAgency').value.trim(),
-  };
+  auditContext = getAuditContextFromFields();
   saveAuditContext(auditContext);
 
   if (!asset || !nom) {
@@ -907,6 +934,7 @@ document.getElementById('addEntry').addEventListener('click', () => {
   renderTable();
 
   // Réinitialise les champs de saisie pour la prochaine machine (garde le bureau).
+  editingContextBackup = null;
   resetEntryForm();
 });
 
