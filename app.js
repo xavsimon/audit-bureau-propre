@@ -565,6 +565,13 @@ function captureVideoFrame(state) {
   return frame;
 }
 
+function flashScanSuccess() {
+  document.body.classList.remove('scan-success-flash');
+  void document.body.offsetWidth;
+  document.body.classList.add('scan-success-flash');
+  window.setTimeout(() => document.body.classList.remove('scan-success-flash'), 700);
+}
+
 function completeLiveScan(state, config, value, text) {
   const frame = captureVideoFrame(state);
   state.image = frame;
@@ -575,6 +582,7 @@ function completeLiveScan(state, config, value, text) {
   stopLiveScan(state, false);
   if (frame) renderPreview(state);
   document.getElementById(config.progressId).textContent = `Détection confirmée : ${value}`;
+  flashScanSuccess();
 }
 
 function scheduleLiveScan(state, config, delay = LIVE_INTERVAL_MS) {
