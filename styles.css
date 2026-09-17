@@ -110,6 +110,12 @@ main {
   border-radius: 10px;
   margin-bottom: 14px;
 }
+.btn-cancel-edit {
+  display: block;
+  width: 100%;
+  margin-top: -6px;
+  margin-bottom: 14px;
+}
 
 .file-btn { position: relative; overflow: hidden; }
 .file-btn input[type="file"] {
@@ -269,6 +275,15 @@ th { background: #efe9f6; }
   color: var(--danger);
   font-size: 1.1rem;
   cursor: pointer;
+}
+
+.row-edit {
+  background: none;
+  border: none;
+  color: var(--primary-dark);
+  font-size: 1.1rem;
+  cursor: pointer;
+  margin-right: 4px;
 }
 
 .export-row {

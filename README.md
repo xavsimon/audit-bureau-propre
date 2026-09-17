@@ -71,7 +71,9 @@ Deux façons simples de faire cela, au choix :
 4. Complétez éventuellement le bureau/la salle et un commentaire.
 5. Cliquez sur **"Ajouter à la liste"**.
 6. Répétez pour chaque PC non attaché trouvé.
-7. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
+7. Pour corriger une ligne, cliquez sur le crayon dans la dernière colonne, modifiez les champs,
+   puis cliquez sur **"Enregistrer la modification"**.
+8. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
   feuille de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé
   et peut être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
 9. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser

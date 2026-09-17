@@ -754,6 +754,7 @@ function saveEntries(entries) {
 }
 
 let entries = loadEntries();
+let editingIndex = null;
 
 function renderTable() {
   const tbody = document.querySelector('#entryTable tbody');
@@ -767,7 +768,10 @@ function renderTable() {
       <td>${escapeHtml(entry.nom)}</td>
       <td>${escapeHtml(entry.bureau)}</td>
       <td>${escapeHtml(entry.commentaire)}</td>
-      <td><button class="row-del" data-idx="${idx}" title="Supprimer">✕</button></td>
+      <td>
+        <button class="row-edit" data-idx="${idx}" title="Modifier" aria-label="Modifier">✎</button>
+        <button class="row-del" data-idx="${idx}" title="Supprimer" aria-label="Supprimer">✕</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -781,13 +785,44 @@ function escapeHtml(s) {
 }
 
 document.querySelector('#entryTable tbody').addEventListener('click', (e) => {
+  const editBtn = e.target.closest('.row-edit');
+  if (editBtn) {
+    const idx = Number(editBtn.dataset.idx);
+    const entry = entries[idx];
+    if (!entry) return;
+    editingIndex = idx;
+    document.getElementById('fieldAsset').value = entry.asset;
+    document.getElementById('fieldName').value = entry.nom;
+    document.getElementById('fieldRoom').value = entry.bureau;
+    document.getElementById('fieldComment').value = entry.commentaire;
+    document.getElementById('rawAsset').textContent = '';
+    document.getElementById('rawName').textContent = '';
+    document.getElementById('addEntry').textContent = '💾 Enregistrer la modification';
+    document.getElementById('cancelEdit').hidden = false;
+    document.getElementById('step-extra').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('fieldAsset').focus();
+    return;
+  }
   const btn = e.target.closest('.row-del');
   if (!btn) return;
   const idx = Number(btn.dataset.idx);
   entries.splice(idx, 1);
+  if (idx === editingIndex) resetEntryForm();
+  else if (editingIndex !== null && idx < editingIndex) editingIndex -= 1;
   saveEntries(entries);
   renderTable();
 });
+
+function resetEntryForm() {
+  editingIndex = null;
+  document.getElementById('fieldAsset').value = '';
+  document.getElementById('fieldName').value = '';
+  document.getElementById('fieldComment').value = '';
+  document.getElementById('rawAsset').textContent = '';
+  document.getElementById('rawName').textContent = '';
+  document.getElementById('addEntry').textContent = '➕ Ajouter à la liste';
+  document.getElementById('cancelEdit').hidden = true;
+}
 
 document.getElementById('addEntry').addEventListener('click', () => {
   const asset = document.getElementById('fieldAsset').value.trim();
@@ -800,30 +835,39 @@ document.getElementById('addEntry').addEventListener('click', () => {
     return;
   }
 
-  const now = new Date();
-  entries.push({
-    date: now.toLocaleDateString('fr-FR'),
-    heure: now.toLocaleTimeString('fr-FR'),
-    asset,
-    nom,
-    bureau,
-    commentaire,
-  });
+  if (editingIndex === null) {
+    const now = new Date();
+    entries.push({
+      date: now.toLocaleDateString('fr-FR'),
+      heure: now.toLocaleTimeString('fr-FR'),
+      asset,
+      nom,
+      bureau,
+      commentaire,
+    });
+  } else {
+    entries[editingIndex] = {
+      ...entries[editingIndex],
+      asset,
+      nom,
+      bureau,
+      commentaire,
+    };
+  }
   saveEntries(entries);
   renderTable();
 
   // Réinitialise les champs de saisie pour la prochaine machine (garde le bureau).
-  document.getElementById('fieldAsset').value = '';
-  document.getElementById('fieldName').value = '';
-  document.getElementById('fieldComment').value = '';
-  document.getElementById('rawAsset').textContent = '';
-  document.getElementById('rawName').textContent = '';
+  resetEntryForm();
 });
+
+document.getElementById('cancelEdit').addEventListener('click', resetEntryForm);
 
 document.getElementById('clearAll').addEventListener('click', () => {
   if (!entries.length) return;
   if (!confirm('Supprimer définitivement toutes les entrées de la liste ?')) return;
   entries = [];
+  resetEntryForm();
   saveEntries(entries);
   renderTable();
 });
