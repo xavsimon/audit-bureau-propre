@@ -14,7 +14,7 @@ ni rotation manuelle n'est nécessaire en usage normal.
   fichiers de langue (`lang/`) sont embarqués localement, ils ne sont pas téléchargés depuis un CDN.
 - La liste des PC non attachés est stockée uniquement dans le stockage local du téléphone
   (`localStorage`), jamais transmise.
-- Seul le fichier `.xlsx` que vous générez volontairement avec le bouton "Exporter" sort de
+- Seul le fichier `.xlsx` que vous générez volontairement avec le bouton "Exporter le fichier" sort de
   l'application (vous choisissez ensuite quoi en faire : l'envoyer par mail, le stocker, etc.).
 
 ## Pourquoi il faut "servir" l'application (ne pas juste double-cliquer sur index.html)
@@ -70,10 +70,9 @@ Deux façons simples de faire cela, au choix :
 4. Complétez éventuellement le bureau/la salle et un commentaire.
 5. Cliquez sur **"Ajouter à la liste"**.
 6. Répétez pour chaque PC non attaché trouvé.
-7. En fin de tournée, cliquez sur **"Exporter en Excel (.xlsx)"** pour générer le fichier de sortie.
-8. Sur téléphone, cliquez sur **"Partager vers OneDrive"** puis choisissez OneDrive dans la feuille
-  de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé et peut
-  être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
+7. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
+  feuille de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé
+  et peut être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
 9. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
    une fois l'export récupéré).
 

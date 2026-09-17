@@ -862,11 +862,6 @@ function ensureEntriesForExport() {
   return true;
 }
 
-document.getElementById('exportXlsx').addEventListener('click', () => {
-  if (!ensureEntriesForExport()) return;
-  downloadExportFile(getExportFile());
-});
-
 document.getElementById('shareOneDrive').addEventListener('click', async () => {
   if (!ensureEntriesForExport()) return;
   const file = getExportFile();
