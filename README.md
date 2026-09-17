@@ -1,9 +1,10 @@
 # Audit Bureau Propre — application locale (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
-photo de l'étiquette d'asset → lecture **automatique** du numéro d'asset (orientation et zone de
-texte détectées toutes seules), photo de l'écran de verrouillage → lecture **automatique** du nom,
-puis export Excel en fin d'audit. Aucun recadrage ni rotation manuelle n'est nécessaire en usage normal.
+scanner live ou photo de l'étiquette d'asset → lecture **automatique** du numéro d'asset
+(orientation et zone de texte détectées toutes seules), scanner live ou photo de l'écran de
+verrouillage → lecture **automatique** du nom, puis export Excel en fin d'audit. Aucun recadrage
+ni rotation manuelle n'est nécessaire en usage normal.
 
 ## Confidentialité
 
@@ -49,14 +50,21 @@ Deux façons simples de faire cela, au choix :
 
 > Sur iPhone, l'option A (PC + même Wi-Fi) est la plus simple, Safari n'ayant pas d'équivalent Termux.
 
+> **Scanner live et HTTPS** : les navigateurs autorisent la caméra sur `https://` ou sur
+> `http://localhost`, mais pas normalement sur une adresse IP en `http://`. L'adresse Wi-Fi
+> affichée par `server.js` permet donc le mode photo ; pour utiliser le scanner live depuis un
+> téléphone, servez l'application via HTTPS sur le réseau local (avec un certificat accepté par
+> le téléphone). Sur le PC qui héberge l'application, `http://localhost:8080` peut utiliser la
+> caméra locale.
+
 ## Utilisation pendant l'audit
 
-1. **Étiquette d'asset** : prenez la photo de l'étiquette (dans n'importe quel sens). L'application
-   teste automatiquement les 4 orientations, repère la ligne "Asset: ..." et relit cette zone en
-   haute qualité. Le numéro d'asset détecté est pré-rempli en quelques secondes — vérifiez-le tout
-   de même avant de continuer (l'OCR n'est jamais garanti à 100%).
-2. **Écran de verrouillage** : prenez la photo de l'écran. Le nom affiché est détecté et pré-rempli
-   automatiquement de la même façon. Vérifiez/corrigez si besoin.
+1. **Étiquette d'asset** : démarrez le **scanner live**, placez l'étiquette dans le viseur et
+  maintenez le téléphone quelques instants. L'application essaie les 4 orientations et arrête la
+  caméra après deux lectures identiques. Le numéro détecté est pré-rempli — vérifiez-le toujours.
+  Le bouton **Photo étiquette** reste disponible comme solution de repli.
+2. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché,
+  ou utilisez **Photo écran**. Le nom est pré-rempli automatiquement ; vérifiez/corrigez si besoin.
 3. Si un résultat est incorrect, ouvrez le bloc **"Résultat incorrect ? Réglage manuel"** : vous
    pouvez alors tourner l'image, dessiner vous-même un cadre autour du texte, puis "Relire".
 4. Complétez éventuellement le bureau/la salle et un commentaire.
@@ -79,9 +87,10 @@ lang/             données de langue Tesseract (eng + fra), en local
 
 ## Limites connues
 
-- La détection automatique (orientation + zone de texte) prend quelques secondes (elle teste les
-  4 orientations possibles). La toute première photo de la session est un peu plus longue, le
-  temps de charger le moteur OCR.
+- Le scanner live analyse une image à la fois, à intervalles courts, en faisant tourner les
+  4 orientations possibles. Il faut garder le texte dans le viseur et attendre deux lectures
+  identiques ; la toute première analyse est plus longue, le temps de charger le moteur OCR.
+- La détection automatique sur photo (orientation + zone de texte) prend quelques secondes.
 - La reconnaissance du numéro d'asset et du nom est une **suggestion automatique** : relisez
   toujours les champs avant d'ajouter une entrée à la liste.
 - Si l'étiquette/l'écran n'est pas détecté automatiquement (éclairage difficile, reflet...),

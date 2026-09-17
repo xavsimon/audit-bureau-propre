@@ -16,6 +16,13 @@
 
   <section class="card" id="step-asset">
     <h2>1. Étiquette d'asset (PC non attaché)</h2>
+    <button class="btn btn-live full-width" id="startLiveAsset" type="button">📹 Démarrer le scanner live</button>
+    <div class="live-scanner" id="liveWrapAsset" hidden>
+      <video id="liveVideoAsset" class="live-video" playsinline muted></video>
+      <div class="scan-frame" aria-hidden="true"></div>
+      <div class="live-status" id="liveStatusAsset" aria-live="polite"></div>
+      <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
+    </div>
     <label class="btn btn-primary file-btn full-width">
       📷 Photo étiquette
       <input type="file" accept="image/*" capture="environment" id="fileAsset">
@@ -47,6 +54,13 @@
 
   <section class="card" id="step-name">
     <h2>2. Écran de verrouillage (nom de l'utilisateur)</h2>
+    <button class="btn btn-live full-width" id="startLiveName" type="button">📹 Démarrer le scanner live</button>
+    <div class="live-scanner" id="liveWrapName" hidden>
+      <video id="liveVideoName" class="live-video" playsinline muted></video>
+      <div class="scan-frame" aria-hidden="true"></div>
+      <div class="live-status" id="liveStatusName" aria-live="polite"></div>
+      <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>
+    </div>
     <label class="btn btn-primary file-btn full-width">
       📷 Photo écran
       <input type="file" accept="image/*" capture="environment" id="fileName">

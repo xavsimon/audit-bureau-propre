@@ -9,7 +9,7 @@
 const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
-function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId) {
+function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId) {
   return {
     fileInput: document.getElementById(fileInputId),
     canvas: document.getElementById(canvasId),
@@ -19,20 +19,43 @@ function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, res
     ocrBtn: document.getElementById(ocrBtnId),
     wrap: document.getElementById(wrapId),
     cropBox: document.getElementById(cropBoxId),
+    liveBtn: document.getElementById(liveBtnId),
+    liveWrap: document.getElementById(liveWrapId),
+    liveVideo: document.getElementById(liveVideoId),
+    liveStatus: document.getElementById(liveStatusId),
+    stopLiveBtn: document.getElementById(stopLiveBtnId),
     image: null,
     rotation: 0,
     invert: false,
     // Zone recadrée, en fractions [0,1] du canvas affiché (post-rotation). null = image entière.
     crop: null,
+    liveStream: null,
+    liveActive: false,
+    liveBusy: false,
+    liveTimer: null,
+    liveRotationIndex: 0,
+    liveStableValue: '',
+    liveStableCount: 0,
+    liveStableMisses: 0,
+    liveSaved: null,
   };
 }
 
 const assetState = createCaptureState(
-  'fileAsset', 'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset'
+  'fileAsset', 'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset',
+  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset'
 );
 const nameState = createCaptureState(
-  'fileName', 'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName'
+  'fileName', 'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName',
+  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName'
 );
+
+function getImageDimensions(image) {
+  return {
+    width: image.videoWidth || image.naturalWidth || image.width,
+    height: image.videoHeight || image.naturalHeight || image.height,
+  };
+}
 
 function loadImageFile(input, state) {
   return new Promise((resolve, reject) => {
@@ -57,16 +80,18 @@ function loadImageFile(input, state) {
 function renderPreview(state) {
   const { canvas, image, rotation } = state;
   if (!image) return;
+  const { width: imageWidth, height: imageHeight } = getImageDimensions(image);
+  if (!imageWidth || !imageHeight) return;
   const ctx = canvas.getContext('2d');
   const swapped = rotation % 180 !== 0;
-  const w = swapped ? image.height : image.width;
-  const h = swapped ? image.width : image.height;
+  const w = swapped ? imageHeight : imageWidth;
+  const h = swapped ? imageWidth : imageHeight;
   canvas.width = w;
   canvas.height = h;
   ctx.save();
   ctx.translate(w / 2, h / 2);
   ctx.rotate((rotation * Math.PI) / 180);
-  ctx.drawImage(image, -image.width / 2, -image.height / 2);
+  ctx.drawImage(image, -imageWidth / 2, -imageHeight / 2, imageWidth, imageHeight);
   ctx.restore();
   updateCropBoxUI(state);
 }
@@ -159,9 +184,10 @@ function wireCropSelection(state) {
 // contraste étiré, inversion optionnelle) prêt pour l'OCR.
 function buildOcrCanvas(state) {
   const { image, rotation, invert, crop } = state;
+  const { width: imageWidth, height: imageHeight } = getImageDimensions(image);
   const swapped = rotation % 180 !== 0;
-  const fullW = swapped ? image.height : image.width;
-  const fullH = swapped ? image.width : image.height;
+  const fullW = swapped ? imageHeight : imageWidth;
+  const fullH = swapped ? imageWidth : imageHeight;
 
   const MAX_DIM = 1800;
   const scale = Math.min(1, MAX_DIM / Math.max(fullW, fullH));
@@ -256,6 +282,9 @@ function wireCapture(state, onReady) {
     state.crop = null;
     updateCropBoxUI(state);
   });
+
+  state.liveBtn.addEventListener('click', () => startLiveScan(state, getLiveConfig(state)));
+  state.stopLiveBtn.addEventListener('click', () => stopLiveScan(state, true));
 
   wireCropSelection(state);
 }
@@ -454,6 +483,200 @@ function extractName(text) {
     kept.push(tok);
   }
   return kept.join(' ') || lines[0];
+}
+
+const LIVE_CONFIRMATIONS = 2;
+const LIVE_INTERVAL_MS = 250;
+const LIVE_CROP = { x: 0.08, y: 0.15, w: 0.84, h: 0.70 };
+
+function getLiveConfig(state) {
+  if (state === assetState) {
+    return {
+      fieldId: 'fieldAsset',
+      rawId: 'rawAsset',
+      progressId: 'progressAsset',
+      extract: extractAssetNumber,
+    };
+  }
+  return {
+    fieldId: 'fieldName',
+    rawId: 'rawName',
+    progressId: 'progressName',
+    extract: (text) => {
+      const value = extractName(text);
+      return scoreNameLine(value) >= 2 ? value : '';
+    },
+  };
+}
+
+function normalizeLiveValue(value) {
+  return value.replace(/\s+/g, ' ').trim().toLocaleUpperCase('fr-FR');
+}
+
+function restoreLiveState(state) {
+  if (!state.liveSaved) return;
+  const saved = state.liveSaved;
+  state.liveSaved = null;
+  state.image = saved.image;
+  state.rotation = saved.rotation;
+  state.invert = saved.invert;
+  state.crop = saved.crop;
+  if (state.image) renderPreview(state);
+}
+
+function stopLiveScan(state, restore = true) {
+  if (state.liveTimer !== null) {
+    clearTimeout(state.liveTimer);
+    state.liveTimer = null;
+  }
+  state.liveActive = false;
+  state.liveBusy = false;
+  if (state.liveStream) {
+    state.liveStream.getTracks().forEach((track) => track.stop());
+    state.liveStream = null;
+  }
+  state.liveVideo.pause();
+  state.liveVideo.srcObject = null;
+  state.liveWrap.hidden = true;
+  state.canvas.hidden = false;
+  state.fileInput.disabled = false;
+  state.liveBtn.disabled = false;
+  state.stopLiveBtn.disabled = false;
+  if (restore) restoreLiveState(state);
+  const hasImage = Boolean(state.image);
+  state.rotateBtn.disabled = !hasImage;
+  state.invertBtn.disabled = !hasImage;
+  state.resetCropBtn.disabled = !hasImage;
+  state.ocrBtn.disabled = !hasImage;
+  state.liveStableValue = '';
+  state.liveStableCount = 0;
+  state.liveStableMisses = 0;
+  if (!restore) state.liveSaved = null;
+  state.liveStatus.textContent = '';
+}
+
+function captureVideoFrame(state) {
+  const { videoWidth, videoHeight } = state.liveVideo;
+  if (!videoWidth || !videoHeight) return null;
+  const frame = document.createElement('canvas');
+  frame.width = videoWidth;
+  frame.height = videoHeight;
+  frame.getContext('2d').drawImage(state.liveVideo, 0, 0, videoWidth, videoHeight);
+  return frame;
+}
+
+function completeLiveScan(state, config, value, text) {
+  const frame = captureVideoFrame(state);
+  state.image = frame;
+  state.rotation = ROTATIONS[(state.liveRotationIndex + ROTATIONS.length - 1) % ROTATIONS.length];
+  state.crop = null;
+  document.getElementById(config.rawId).textContent = text.trim();
+  document.getElementById(config.fieldId).value = value;
+  stopLiveScan(state, false);
+  if (frame) renderPreview(state);
+  document.getElementById(config.progressId).textContent = `Détection confirmée : ${value}`;
+}
+
+function scheduleLiveScan(state, config, delay = LIVE_INTERVAL_MS) {
+  if (!state.liveActive) return;
+  state.liveTimer = window.setTimeout(() => scanLiveFrame(state, config), delay);
+}
+
+async function scanLiveFrame(state, config) {
+  state.liveTimer = null;
+  if (!state.liveActive || state.liveBusy) return;
+  if (state.liveVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    scheduleLiveScan(state, config);
+    return;
+  }
+
+  state.liveBusy = true;
+  state.rotation = ROTATIONS[state.liveRotationIndex];
+  state.liveRotationIndex = (state.liveRotationIndex + 1) % ROTATIONS.length;
+  state.crop = LIVE_CROP;
+  try {
+    const text = await withOcrLock(() => runOcr(state, state.liveStatus));
+    if (!state.liveActive) return;
+    const value = config.extract(text);
+    if (value) {
+      const normalized = normalizeLiveValue(value);
+      state.liveStableMisses = 0;
+      if (normalized === state.liveStableValue) {
+        state.liveStableCount += 1;
+      } else {
+        state.liveStableValue = normalized;
+        state.liveStableCount = 1;
+      }
+      state.liveStatus.textContent = `Lecture détectée (${state.liveStableCount}/${LIVE_CONFIRMATIONS}) : ${value}`;
+      if (state.liveStableCount >= LIVE_CONFIRMATIONS) {
+        completeLiveScan(state, config, value, text);
+      }
+    } else {
+      state.liveStableMisses += 1;
+      if (state.liveStableMisses > ROTATIONS.length + 1) {
+        state.liveStableValue = '';
+        state.liveStableCount = 0;
+      }
+      state.liveStatus.textContent = 'Recherche en cours...';
+    }
+  } catch (e) {
+    if (state.liveActive) state.liveStatus.textContent = 'Lecture impossible, réessayez...';
+  } finally {
+    state.liveBusy = false;
+    scheduleLiveScan(state, config);
+  }
+}
+
+async function startLiveScan(state, config) {
+  if (state.liveActive) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('La caméra nécessite une page HTTPS ou localhost dans un navigateur compatible.');
+    return;
+  }
+
+  state.liveSaved = {
+    image: state.image,
+    rotation: state.rotation,
+    invert: state.invert,
+    crop: state.crop,
+  };
+  state.image = null;
+  state.crop = null;
+  state.rotation = 0;
+  state.invert = false;
+  state.liveActive = true;
+  state.liveBusy = false;
+  state.liveRotationIndex = 0;
+  state.liveStableValue = '';
+  state.liveStableCount = 0;
+  state.liveStableMisses = 0;
+  state.liveBtn.disabled = true;
+  state.fileInput.disabled = true;
+  state.canvas.hidden = true;
+  state.liveWrap.hidden = false;
+  state.liveStatus.textContent = 'Connexion à la caméra...';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    if (!state.liveActive) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    state.liveStream = stream;
+    state.liveVideo.srcObject = stream;
+    await state.liveVideo.play();
+    state.liveStatus.textContent = 'Cadrez le texte dans le viseur...';
+    scheduleLiveScan(state, config, 400);
+  } catch (e) {
+    stopLiveScan(state, true);
+    const message = e.name === 'NotAllowedError'
+      ? "L'accès à la caméra a été refusé."
+      : "Impossible d'ouvrir la caméra.";
+    alert(message);
+  }
 }
 
 async function runAssetOcr() {
