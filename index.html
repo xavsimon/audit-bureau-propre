@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Audit Bureau Propre</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>🔒 Audit Bureau Propre</h1>
+  <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
+</header>
+
+<main>
+
+  <section class="card" id="step-asset">
+    <h2>1. Étiquette d'asset (PC non attaché)</h2>
+    <label class="btn btn-primary file-btn full-width">
+      📷 Photo étiquette
+      <input type="file" accept="image/*" capture="environment" id="fileAsset">
+    </label>
+    <p class="auto-hint">L'orientation et la zone du texte sont détectées automatiquement après la photo.</p>
+    <div class="canvas-wrap" id="wrapAsset">
+      <canvas id="canvasAsset" class="preview"></canvas>
+      <div class="crop-box" id="cropBoxAsset" hidden></div>
+    </div>
+    <div class="progress" id="progressAsset"></div>
+    <label class="field-label">N° Asset (vérifiez / corrigez)</label>
+    <input type="text" id="fieldAsset" placeholder="ex : S165964" autocomplete="off">
+    <details class="raw-text">
+      <summary>Texte brut détecté</summary>
+      <pre id="rawAsset"></pre>
+    </details>
+    <details class="manual-tools">
+      <summary>Résultat incorrect ? Réglage manuel</summary>
+      <div class="capture-row">
+        <button class="btn" id="rotateAsset" disabled>⟳ Rotation</button>
+        <button class="btn" id="invertAsset" disabled>◐ Inverser</button>
+        <button class="btn" id="resetCropAsset" disabled>▭ Cadrage complet</button>
+      </div>
+      <p class="crop-hint">Tournez si besoin, puis dessinez avec le doigt un cadre serré autour du texte
+        "Asset: ...", puis relisez.</p>
+      <button class="btn btn-secondary" id="ocrAsset" disabled>🔄 Relire (OCR)</button>
+    </details>
+  </section>
+
+  <section class="card" id="step-name">
+    <h2>2. Écran de verrouillage (nom de l'utilisateur)</h2>
+    <label class="btn btn-primary file-btn full-width">
+      📷 Photo écran
+      <input type="file" accept="image/*" capture="environment" id="fileName">
+    </label>
+    <p class="auto-hint">L'orientation et la zone du nom sont détectées automatiquement après la photo.</p>
+    <div class="canvas-wrap" id="wrapName">
+      <canvas id="canvasName" class="preview"></canvas>
+      <div class="crop-box" id="cropBoxName" hidden></div>
+    </div>
+    <div class="progress" id="progressName"></div>
+    <label class="field-label">Nom de la personne connectée (vérifiez / corrigez)</label>
+    <input type="text" id="fieldName" placeholder="ex : SIMON Xavier" autocomplete="off">
+    <details class="raw-text">
+      <summary>Texte brut détecté</summary>
+      <pre id="rawName"></pre>
+    </details>
+    <details class="manual-tools">
+      <summary>Résultat incorrect ? Réglage manuel</summary>
+      <div class="capture-row">
+        <button class="btn" id="rotateName" disabled>⟳ Rotation</button>
+        <button class="btn" id="invertName" disabled>◐ Inverser</button>
+        <button class="btn" id="resetCropName" disabled>▭ Cadrage complet</button>
+      </div>
+      <p class="crop-hint">Dessinez avec le doigt un cadre serré juste autour du nom affiché, puis relisez.</p>
+      <button class="btn btn-secondary" id="ocrName" disabled>🔄 Relire (OCR)</button>
+    </details>
+  </section>
+
+  <section class="card" id="step-extra">
+    <h2>3. Informations complémentaires (facultatif)</h2>
+    <label class="field-label">Bureau / Salle</label>
+    <input type="text" id="fieldRoom" placeholder="ex : Bat B - 3e étage" autocomplete="off">
+    <label class="field-label">Commentaire</label>
+    <input type="text" id="fieldComment" placeholder="ex : câble antivol absent" autocomplete="off">
+  </section>
+
+  <button class="btn btn-add" id="addEntry">➕ Ajouter à la liste</button>
+
+  <section class="card" id="step-list">
+    <h2>4. Liste des PC non attachés (<span id="entryCount">0</span>)</h2>
+    <div class="table-wrap">
+      <table id="entryTable">
+        <thead>
+          <tr>
+            <th>Date</th><th>Heure</th><th>N° Asset</th><th>Nom</th><th>Bureau</th><th>Commentaire</th><th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="export-row">
+      <button class="btn btn-primary" id="exportXlsx">📤 Exporter en Excel (.xlsx)</button>
+      <button class="btn btn-danger" id="clearAll">🗑 Vider la liste</button>
+    </div>
+  </section>
+
+  <p class="privacy-note">
+    Toutes les photos et le texte OCR restent uniquement dans la mémoire de votre téléphone
+    (traitement local via WebAssembly, aucun appel réseau). Seul le fichier Excel que vous exportez
+    volontairement quitte l'application.
+  </p>
+</main>
+
+<script src="vendor/tesseract.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

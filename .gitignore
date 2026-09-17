@@ -1,0 +1,10 @@
+# Photos de test personnelles (contiennent un vrai nom / numéro d'asset) — ne pas publier.
+IMG_6385.jpeg
+personne.jpg
+
+# Fichiers Excel exportés localement pendant les audits.
+audit_bureau_propre_*.xlsx
+
+# Divers
+.DS_Store
+Thumbs.db
