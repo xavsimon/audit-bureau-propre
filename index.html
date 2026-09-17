@@ -9,11 +9,29 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.1.6</span>
+  <span class="version-badge">Version 1.1.7</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
 <main>
+
+  <section class="card audit-context" id="audit-context">
+    <h2>Informations de l'audit</h2>
+    <div class="context-grid">
+      <div>
+        <label class="field-label" for="fieldFloor">Étage</label>
+        <input type="text" id="fieldFloor" placeholder="ex : 3e" autocomplete="off">
+      </div>
+      <div>
+        <label class="field-label" for="fieldBu">BU</label>
+        <input type="text" id="fieldBu" placeholder="ex : Conseil" autocomplete="off">
+      </div>
+      <div>
+        <label class="field-label" for="fieldAgency">Agence</label>
+        <input type="text" id="fieldAgency" placeholder="ex : Paris" autocomplete="off">
+      </div>
+    </div>
+  </section>
 
   <section class="card" id="step-asset">
     <h2>1. Étiquette d'asset (PC non attaché)</h2>
@@ -107,7 +125,7 @@
       <table id="entryTable">
         <thead>
           <tr>
-            <th>Date</th><th>Heure</th><th>N° Asset</th><th>Nom</th><th>Bureau</th><th>Commentaire</th><th></th>
+            <th>Date</th><th>Heure</th><th>N° Asset</th><th>Nom</th><th>Bureau</th><th>Commentaire</th><th>Actions</th>
           </tr>
         </thead>
         <tbody></tbody>

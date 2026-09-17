@@ -59,24 +59,26 @@ Deux façons simples de faire cela, au choix :
 
 ## Utilisation pendant l'audit
 
-1. **Étiquette d'asset** : démarrez le **scanner live**, placez l'étiquette dans le viseur et
+1. Renseignez **Étage**, **BU** et **Agence** en haut de l'écran. Ces valeurs restent présentes
+  d'un PC à l'autre et sont conservées localement.
+2. **Étiquette d'asset** : démarrez le **scanner live**, placez l'étiquette dans le viseur et
   maintenez le téléphone quelques instants. L'image live est supposée être dans le bon sens et
   la caméra s'arrête après deux lectures identiques. Le numéro détecté est pré-rempli — vérifiez-le
   toujours.
   Le bouton **Photo étiquette** reste disponible comme solution de repli.
-2. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché,
+3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché,
   ou utilisez **Photo écran**. Le nom est pré-rempli automatiquement ; vérifiez/corrigez si besoin.
-3. Si un résultat est incorrect, ouvrez le bloc **"Résultat incorrect ? Réglage manuel"** : vous
+4. Si un résultat est incorrect, ouvrez le bloc **"Résultat incorrect ? Réglage manuel"** : vous
    pouvez alors tourner l'image, dessiner vous-même un cadre autour du texte, puis "Relire".
-4. Complétez éventuellement le bureau/la salle et un commentaire.
-5. Cliquez sur **"Ajouter à la liste"**.
-6. Répétez pour chaque PC non attaché trouvé.
-7. Pour corriger une ligne, cliquez sur le crayon dans la dernière colonne, modifiez les champs,
+5. Complétez éventuellement le bureau/la salle et un commentaire.
+6. Cliquez sur **"Ajouter à la liste"**.
+7. Répétez pour chaque PC non attaché trouvé.
+8. Pour corriger une ligne, cliquez sur **"Modifier"** dans la colonne Actions, modifiez les champs,
    puis cliquez sur **"Enregistrer la modification"**.
-8. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
+9. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
   feuille de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé
   et peut être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
-9. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
+10. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
    une fois l'export récupéré).
 
 ## Structure du dossier

@@ -7,6 +7,7 @@
  */
 
 const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
+const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
 function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId) {
@@ -753,6 +754,42 @@ function saveEntries(entries) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
+function loadAuditContext() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY) || '{}');
+    return {
+      etage: String(stored.etage || ''),
+      bu: String(stored.bu || ''),
+      agence: String(stored.agence || ''),
+    };
+  } catch (e) {
+    return { etage: '', bu: '', agence: '' };
+  }
+}
+
+function saveAuditContext(context) {
+  localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(context));
+}
+
+let auditContext = loadAuditContext();
+const contextFieldMap = {
+  fieldFloor: 'etage',
+  fieldBu: 'bu',
+  fieldAgency: 'agence',
+};
+
+Object.entries(contextFieldMap).forEach(([fieldId, contextKey]) => {
+  const field = document.getElementById(fieldId);
+  field.value = auditContext[contextKey];
+  field.addEventListener('input', () => {
+    auditContext = {
+      ...auditContext,
+      [contextKey]: field.value,
+    };
+    saveAuditContext(auditContext);
+  });
+});
+
 let entries = loadEntries();
 let editingIndex = null;
 
@@ -769,7 +806,7 @@ function renderTable() {
       <td>${escapeHtml(entry.bureau)}</td>
       <td>${escapeHtml(entry.commentaire)}</td>
       <td>
-        <button class="row-edit" data-idx="${idx}" title="Modifier" aria-label="Modifier">✎</button>
+        <button class="row-edit" data-idx="${idx}" title="Modifier cette ligne" aria-label="Modifier cette ligne">✎ Modifier</button>
         <button class="row-del" data-idx="${idx}" title="Supprimer" aria-label="Supprimer">✕</button>
       </td>
     `;
@@ -829,6 +866,12 @@ document.getElementById('addEntry').addEventListener('click', () => {
   const nom = document.getElementById('fieldName').value.trim();
   const bureau = document.getElementById('fieldRoom').value.trim();
   const commentaire = document.getElementById('fieldComment').value.trim();
+  auditContext = {
+    etage: document.getElementById('fieldFloor').value.trim(),
+    bu: document.getElementById('fieldBu').value.trim(),
+    agence: document.getElementById('fieldAgency').value.trim(),
+  };
+  saveAuditContext(auditContext);
 
   if (!asset || !nom) {
     alert("Merci de renseigner au minimum le N° Asset et le nom avant d'ajouter à la liste.");
@@ -842,6 +885,9 @@ document.getElementById('addEntry').addEventListener('click', () => {
       heure: now.toLocaleTimeString('fr-FR'),
       asset,
       nom,
+      etage: auditContext.etage,
+      bu: auditContext.bu,
+      agence: auditContext.agence,
       bureau,
       commentaire,
     });
@@ -850,6 +896,9 @@ document.getElementById('addEntry').addEventListener('click', () => {
       ...entries[editingIndex],
       asset,
       nom,
+      etage: auditContext.etage,
+      bu: auditContext.bu,
+      agence: auditContext.agence,
       bureau,
       commentaire,
     };
@@ -878,11 +927,14 @@ function buildExportWorkbook() {
     Heure: e.heure,
     'N° Asset': e.asset,
     'Nom de la personne connectée': e.nom,
+    Étage: e.etage || '',
+    BU: e.bu || '',
+    Agence: e.agence || '',
     'Bureau / Salle': e.bureau,
     Commentaire: e.commentaire,
   }));
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 }, { wch: 30 }];
+  ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 30 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'PC non attachés');
   return wb;

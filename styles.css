@@ -74,6 +74,12 @@ main {
   color: var(--primary-dark);
 }
 
+.context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .capture-row {
   display: flex;
   gap: 8px;
@@ -116,6 +122,7 @@ main {
   margin-top: -6px;
   margin-bottom: 14px;
 }
+.btn-cancel-edit[hidden] { display: none; }
 
 .file-btn { position: relative; overflow: hidden; }
 .file-btn input[type="file"] {
@@ -268,6 +275,7 @@ th, td {
   vertical-align: top;
 }
 th { background: #efe9f6; }
+th:last-child, td:last-child { white-space: nowrap; }
 
 .row-del {
   background: none;
@@ -278,12 +286,18 @@ th { background: #efe9f6; }
 }
 
 .row-edit {
-  background: none;
+  background: var(--primary-dark);
   border: none;
-  color: var(--primary-dark);
-  font-size: 1.1rem;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.8rem;
+  padding: 6px 8px;
   cursor: pointer;
   margin-right: 4px;
+}
+
+@media (max-width: 480px) {
+  .context-grid { grid-template-columns: 1fr; }
 }
 
 .export-row {
