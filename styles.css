@@ -81,6 +81,7 @@ main {
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-live { background: #1f6f78; color: #fff; margin-bottom: 8px; }
 .btn-live.full-width { display: block; width: 100%; text-align: center; }
+.btn-share { background: #0f6b5b; color: #fff; }
 .btn-secondary { background: var(--secondary); color: #fff; width: 100%; margin-bottom: 8px; }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-add {

@@ -820,11 +820,7 @@ document.getElementById('clearAll').addEventListener('click', () => {
   renderTable();
 });
 
-document.getElementById('exportXlsx').addEventListener('click', () => {
-  if (!entries.length) {
-    alert('La liste est vide.');
-    return;
-  }
+function buildExportWorkbook() {
   const rows = entries.map((e) => ({
     Date: e.date,
     Heure: e.heure,
@@ -837,10 +833,60 @@ document.getElementById('exportXlsx').addEventListener('click', () => {
   ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 }, { wch: 30 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'PC non attachés');
+  return wb;
+}
 
+function getExportFile() {
   const now = new Date();
   const stamp = now.toISOString().slice(0, 16).replace(/[:T]/g, '-');
-  XLSX.writeFile(wb, `audit_bureau_propre_${stamp}.xlsx`);
+  const filename = `audit_bureau_propre_${stamp}.xlsx`;
+  const data = XLSX.write(buildExportWorkbook(), { bookType: 'xlsx', type: 'array' });
+  return new File([data], filename, {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
+function downloadExportFile(file) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(file);
+  link.download = file.name;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function ensureEntriesForExport() {
+  if (!entries.length) {
+    alert('La liste est vide.');
+    return false;
+  }
+  return true;
+}
+
+document.getElementById('exportXlsx').addEventListener('click', () => {
+  if (!ensureEntriesForExport()) return;
+  downloadExportFile(getExportFile());
+});
+
+document.getElementById('shareOneDrive').addEventListener('click', async () => {
+  if (!ensureEntriesForExport()) return;
+  const file = getExportFile();
+  if (!navigator.share || !navigator.canShare || !navigator.canShare({ files: [file] })) {
+    downloadExportFile(file);
+    alert('Le partage natif n’est pas disponible ici. Le fichier a été téléchargé : ouvrez-le puis choisissez OneDrive.');
+    return;
+  }
+  try {
+    await navigator.share({
+      title: 'Audit Bureau Propre',
+      text: 'Export Excel de l’audit bureau propre',
+      files: [file],
+    });
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      downloadExportFile(file);
+      alert('Le partage n’a pas pu être ouvert. Le fichier a été téléchargé : choisissez OneDrive depuis vos fichiers.');
+    }
+  }
 });
 
 renderTable();

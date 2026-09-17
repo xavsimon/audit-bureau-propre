@@ -71,7 +71,10 @@ Deux façons simples de faire cela, au choix :
 5. Cliquez sur **"Ajouter à la liste"**.
 6. Répétez pour chaque PC non attaché trouvé.
 7. En fin de tournée, cliquez sur **"Exporter en Excel (.xlsx)"** pour générer le fichier de sortie.
-8. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
+8. Sur téléphone, cliquez sur **"Partager vers OneDrive"** puis choisissez OneDrive dans la feuille
+  de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé et peut
+  être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
+9. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
    une fois l'export récupéré).
 
 ## Structure du dossier
