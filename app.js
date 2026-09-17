@@ -594,6 +594,14 @@ async function scanLiveFrame(state, config) {
   state.rotation = ROTATIONS[state.liveRotationIndex];
   state.liveRotationIndex = (state.liveRotationIndex + 1) % ROTATIONS.length;
   state.crop = LIVE_CROP;
+  const frame = captureVideoFrame(state);
+  if (!frame) {
+    state.liveBusy = false;
+    state.liveStatus.textContent = 'Mise au point de la caméra...';
+    scheduleLiveScan(state, config);
+    return;
+  }
+  state.image = frame;
   try {
     const text = await withOcrLock(() => runOcr(state, state.liveStatus));
     if (!state.liveActive) return;

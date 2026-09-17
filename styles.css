@@ -27,6 +27,15 @@ header {
 }
 
 header h1 { margin: 0; font-size: 1.4rem; }
+.version-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
 header .subtitle { margin: 6px 0 0; font-size: 0.85rem; opacity: 0.9; }
 
 main {
