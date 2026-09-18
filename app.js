@@ -881,11 +881,15 @@ document.getElementById('cancelEdit').addEventListener('click', resetEntryForm);
 document.getElementById('clearAll').addEventListener('click', () => {
   if (entries.length && !confirm('Supprimer définitivement toutes les entrées de la liste ?')) return;
   entries = [];
+  editingIndex = null;
+  editingContextBackup = null;
   resetEntryForm();
   setAuditContextFields({});
+  document.getElementById('fieldRoom').value = '';
   saveAuditContext(auditContext);
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(CONTEXT_STORAGE_KEY);
   document.querySelector('#audit-context details').open = true;
-  saveEntries(entries);
   renderTable();
 });
 
