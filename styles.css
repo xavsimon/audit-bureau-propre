@@ -31,7 +31,23 @@ body.scan-success-flash::after {
   animation: scan-success-flash 650ms ease-out forwards;
 }
 
+body.scan-failure-flash::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(220, 38, 38, 0.78);
+  pointer-events: none;
+  animation: scan-failure-flash 650ms ease-out forwards;
+}
+
 @keyframes scan-success-flash {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes scan-failure-flash {
   0% { opacity: 0; }
   18% { opacity: 1; }
   100% { opacity: 0; }
@@ -155,6 +171,16 @@ main {
 
 .live-scanner[hidden], .photo-capture[hidden] { display: none; }
 
+.live-scanner.capture-failure-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(220, 38, 38, 0.78);
+  pointer-events: none;
+  animation: scan-failure-flash 650ms ease-out forwards;
+}
+
 .live-video {
   display: block;
   width: 100%;
@@ -162,6 +188,7 @@ main {
   min-height: 0;
   flex: 1;
   object-fit: contain;
+  cursor: pointer;
 }
 
 .scan-frame {
@@ -185,6 +212,24 @@ main {
   font-size: 0.8rem;
   text-shadow: 0 1px 3px #000;
 }
+
+.scan-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 12px;
+  border: 2px solid #22c55e;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #166534;
+  text-align: center;
+}
+
+.scan-result[hidden] { display: none; }
+.scan-result span { font-size: 0.85rem; }
+.scan-result strong { font-size: 2rem; line-height: 1.1; letter-spacing: 0.04em; }
 
 .btn-stop-live {
   background: rgba(0, 0, 0, 0.72);

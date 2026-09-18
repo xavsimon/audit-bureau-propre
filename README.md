@@ -62,16 +62,17 @@ Deux façons simples de faire cela, au choix :
 1. Renseignez **Étage**, **BU** et **Agence** en haut de l'écran. Elles restent préremplies d'un PC
   à l'autre, mais vous pouvez les modifier avant chaque ajout : leurs valeurs sont conservées
   séparément pour chaque PC et apparaissent dans l'export Excel.
-2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran et
-  l'angle du téléphone est pris en compte pour remettre l'étiquette dans le bon sens, y compris
-  maintenez le téléphone quelques instants. Utilisez **Arrêter** pour quitter ce mode ; la caméra
-  s'arrête automatiquement après deux lectures identiques. Le numéro détecté est pré-rempli —
-  vérifiez-le toujours.
+2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Cadrez
+  l'étiquette puis touchez l'image pour prendre une photo. Les quatre angles sont analysés. Si le
+  numéro est trouvé, l'écran flashe en vert, le numéro s'affiche en grand et le scan se ferme. Si
+  rien n'est trouvé, l'écran flashe en rouge et vous pouvez retoucher l'image pour réessayer.
+  Utilisez **Arrêter** pour quitter ce mode. Le numéro détecté est pré-rempli — vérifiez-le toujours.
   Pour une photo fixe, utilisez **Prendre une photo**, puis **Prendre la photo**. **Arrêter** permet
   de quitter sans capturer.
-3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché,
-  ou utilisez **Prendre une photo**. Gardez le haut du nom vers le haut du téléphone ; son angle est
-  est pré-rempli automatiquement ; vérifiez/corrigez si besoin.
+3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché
+  puis en touchant l'image. Les quatre angles sont analysés ; le scan se ferme si le nom est trouvé.
+  Vous pouvez aussi utiliser **Prendre une photo**. Le nom est pré-rempli automatiquement ;
+  vérifiez/corrigez si besoin.
 4. Si un résultat est incorrect, ouvrez le bloc **"Résultat incorrect ? Réglage manuel"** : vous
    pouvez alors tourner l'image, dessiner vous-même un cadre autour du texte, puis "Relire".
 5. Complétez éventuellement le bureau/la salle et un commentaire.
@@ -98,8 +99,7 @@ lang/             données de langue Tesseract (eng + fra), en local
 
 ## Limites connues
 
-- Le scanner live analyse une image à la fois, à intervalles courts, dans l'orientation normale.
-  Il faut garder le texte dans le viseur et attendre deux lectures identiques ; la toute première
+- Le scanner live analyse une photo prise au toucher, dans ses quatre orientations. La première
   analyse est plus longue, le temps de charger le moteur OCR.
 - La détection automatique sur photo (orientation + zone de texte) prend quelques secondes.
 - La reconnaissance du numéro d'asset et du nom est une **suggestion automatique** : relisez

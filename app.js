@@ -38,11 +38,6 @@ function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, 
     liveStream: null,
     liveActive: false,
     liveBusy: false,
-    liveTimer: null,
-    liveRotationIndex: 0,
-    liveStableValue: '',
-    liveStableCount: 0,
-    liveStableMisses: 0,
     liveSaved: null,
     photoStream: null,
     photoActive: false,
@@ -263,6 +258,10 @@ function wireCapture(state, onReady) {
 
   state.liveBtn.addEventListener('click', () => startLiveScan(state, getLiveConfig(state)));
   state.stopLiveBtn.addEventListener('click', () => stopLiveScan(state, true));
+  state.liveWrap.addEventListener('click', (e) => {
+    if (e.target.closest('button, .camera-controls')) return;
+    captureLivePhoto(state, getLiveConfig(state));
+  });
   state.photoBtn.addEventListener('click', () => startPhotoCapture(state, onReady));
   state.capturePhotoBtn.addEventListener('click', () => capturePhoto(state, onReady));
   state.stopPhotoBtn.addEventListener('click', () => stopPhotoCapture(state, true));
@@ -466,15 +465,15 @@ function extractName(text) {
   return kept.join(' ') || lines[0];
 }
 
-const LIVE_CONFIRMATIONS = 2;
-const LIVE_INTERVAL_MS = 250;
-const LIVE_CROP = { x: 0.08, y: 0.15, w: 0.84, h: 0.70 };
 function getLiveConfig(state) {
   if (state === assetState) {
     return {
       fieldId: 'fieldAsset',
       rawId: 'rawAsset',
       progressId: 'progressAsset',
+      resultId: 'scanResultAsset',
+      resultValueId: 'scanResultValueAsset',
+      score: scoreAssetLines,
       extract: extractAssetNumber,
     };
   }
@@ -482,15 +481,14 @@ function getLiveConfig(state) {
     fieldId: 'fieldName',
     rawId: 'rawName',
     progressId: 'progressName',
+    resultId: 'scanResultName',
+    resultValueId: 'scanResultValueName',
+    score: scoreNameLines,
     extract: (text) => {
       const value = extractName(text);
       return scoreNameLine(value) >= 2 ? value : '';
     },
   };
-}
-
-function normalizeLiveValue(value) {
-  return value.replace(/\s+/g, ' ').trim().toLocaleUpperCase('fr-FR');
 }
 
 function restoreSavedState(state, saved) {
@@ -541,10 +539,6 @@ function getPhoneRotation() {
 }
 
 function stopLiveScan(state, restore = true) {
-  if (state.liveTimer !== null) {
-    clearTimeout(state.liveTimer);
-    state.liveTimer = null;
-  }
   state.liveActive = false;
   state.liveBusy = false;
   if (state.liveStream) {
@@ -555,7 +549,7 @@ function stopLiveScan(state, restore = true) {
   state.liveVideo.srcObject = null;
   state.liveWrap.hidden = true;
   state.canvas.hidden = false;
-  void exitCaptureFullscreen(state.liveWrap);
+  const exitPromise = exitCaptureFullscreen(state.liveWrap);
   setCaptureActive(state.photoActive);
   updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
@@ -568,11 +562,9 @@ function stopLiveScan(state, restore = true) {
   state.invertBtn.disabled = !hasImage;
   state.resetCropBtn.disabled = !hasImage;
   state.ocrBtn.disabled = !hasImage;
-  state.liveStableValue = '';
-  state.liveStableCount = 0;
-  state.liveStableMisses = 0;
   if (!restore) state.liveSaved = null;
   state.liveStatus.textContent = '';
+  return exitPromise;
 }
 
 function captureVideoFrame(video) {
@@ -587,78 +579,69 @@ function captureVideoFrame(video) {
 
 function flashScanSuccess() {
   document.body.classList.remove('scan-success-flash');
+  document.body.classList.remove('scan-failure-flash');
   void document.body.offsetWidth;
   document.body.classList.add('scan-success-flash');
   window.setTimeout(() => document.body.classList.remove('scan-success-flash'), 700);
 }
 
-function completeLiveScan(state, config, value, text) {
-  const frame = captureVideoFrame(state.liveVideo);
-  state.image = frame;
-  state.rotation = getPhoneRotation();
-  state.crop = null;
-  document.getElementById(config.rawId).textContent = text.trim();
-  document.getElementById(config.fieldId).value = value;
-  stopLiveScan(state, false);
-  if (frame) renderPreview(state);
-  document.getElementById(config.progressId).textContent = `Détection confirmée : ${value}`;
-  flashScanSuccess();
+function flashScanFailure() {
+  document.body.classList.remove('scan-success-flash');
+  document.body.classList.remove('scan-failure-flash');
+  void document.body.offsetWidth;
+  document.body.classList.add('scan-failure-flash');
+  window.setTimeout(() => document.body.classList.remove('scan-failure-flash'), 700);
 }
 
-function scheduleLiveScan(state, config, delay = LIVE_INTERVAL_MS) {
-  if (!state.liveActive) return;
-  state.liveTimer = window.setTimeout(() => scanLiveFrame(state, config), delay);
+function flashLiveFailure(state) {
+  state.liveWrap.classList.remove('capture-failure-flash');
+  void state.liveWrap.offsetWidth;
+  state.liveWrap.classList.add('capture-failure-flash');
+  window.setTimeout(() => state.liveWrap.classList.remove('capture-failure-flash'), 700);
+  flashScanFailure();
 }
 
-async function scanLiveFrame(state, config) {
-  state.liveTimer = null;
+function clearLiveResult(config) {
+  document.getElementById(config.resultId).hidden = true;
+  document.getElementById(config.resultValueId).textContent = '';
+}
+
+async function captureLivePhoto(state, config) {
   if (!state.liveActive || state.liveBusy) return;
-  if (state.liveVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-    scheduleLiveScan(state, config);
-    return;
-  }
-
   state.liveBusy = true;
-  state.rotation = getPhoneRotation();
-  state.crop = LIVE_CROP;
-  const frame = captureVideoFrame(state);
+  state.liveStatus.textContent = 'Photo prise, analyse des 4 angles...';
+  const frame = captureVideoFrame(state.liveVideo);
   if (!frame) {
-    state.liveBusy = false;
     state.liveStatus.textContent = 'Mise au point de la caméra...';
-    scheduleLiveScan(state, config);
+    state.liveBusy = false;
     return;
   }
+  state.rotation = 0;
+  state.crop = null;
   state.image = frame;
   try {
-    const text = await withOcrLock(() => runOcr(state, state.liveStatus));
+    const text = await withOcrLock(() => autoRecognize(state, config.score, state.liveStatus));
     if (!state.liveActive) return;
+    document.getElementById(config.rawId).textContent = text.trim();
     const value = config.extract(text);
     if (value) {
-      const normalized = normalizeLiveValue(value);
-      state.liveStableMisses = 0;
-      if (normalized === state.liveStableValue) {
-        state.liveStableCount += 1;
-      } else {
-        state.liveStableValue = normalized;
-        state.liveStableCount = 1;
-      }
-      state.liveStatus.textContent = `Lecture détectée (${state.liveStableCount}/${LIVE_CONFIRMATIONS}) : ${value}`;
-      if (state.liveStableCount >= LIVE_CONFIRMATIONS) {
-        completeLiveScan(state, config, value, text);
-      }
+      document.getElementById(config.fieldId).value = value;
+      document.getElementById(config.resultValueId).textContent = value;
+      document.getElementById(config.resultId).hidden = false;
+      document.getElementById(config.progressId).textContent = `Détection confirmée : ${value}`;
+      await stopLiveScan(state, false);
+      flashScanSuccess();
     } else {
-      state.liveStableMisses += 1;
-      if (state.liveStableMisses > ROTATIONS.length + 1) {
-        state.liveStableValue = '';
-        state.liveStableCount = 0;
-      }
-      state.liveStatus.textContent = 'Recherche en cours...';
+      state.liveStatus.textContent = 'Aucun texte reconnu. Touchez l\'image pour réessayer.';
+      flashLiveFailure(state);
     }
   } catch (e) {
-    if (state.liveActive) state.liveStatus.textContent = 'Lecture impossible, réessayez...';
+    if (state.liveActive) {
+      state.liveStatus.textContent = 'Lecture impossible. Touchez l\'image pour réessayer.';
+      flashLiveFailure(state);
+    }
   } finally {
     state.liveBusy = false;
-    scheduleLiveScan(state, config);
   }
 }
 
@@ -675,16 +658,13 @@ async function startLiveScan(state, config) {
     invert: state.invert,
     crop: state.crop,
   };
+  clearLiveResult(config);
   state.image = null;
   state.crop = null;
   state.rotation = 0;
   state.invert = false;
   state.liveActive = true;
   state.liveBusy = false;
-  state.liveRotationIndex = 0;
-  state.liveStableValue = '';
-  state.liveStableCount = 0;
-  state.liveStableMisses = 0;
   updateCaptureButtons(state);
   state.canvas.hidden = true;
   state.liveWrap.hidden = false;
@@ -704,8 +684,7 @@ async function startLiveScan(state, config) {
     state.liveStream = stream;
     state.liveVideo.srcObject = stream;
     await state.liveVideo.play();
-    state.liveStatus.textContent = 'Cadrez le texte dans le viseur...';
-    scheduleLiveScan(state, config, 400);
+    state.liveStatus.textContent = 'Cadrez le texte puis touchez l\'image pour analyser.';
   } catch (e) {
     stopLiveScan(state, true);
     const message = e.name === 'NotAllowedError'
