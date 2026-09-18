@@ -469,8 +469,6 @@ function extractName(text) {
 const LIVE_CONFIRMATIONS = 2;
 const LIVE_INTERVAL_MS = 250;
 const LIVE_CROP = { x: 0.08, y: 0.15, w: 0.84, h: 0.70 };
-const LIVE_ROTATION = 0;
-
 function getLiveConfig(state) {
   if (state === assetState) {
     return {
@@ -532,15 +530,14 @@ function updateCaptureButtons(state) {
   state.photoBtn.disabled = cameraActive;
 }
 
-async function lockCaptureOrientation() {
-  if (!screen.orientation || !screen.orientation.lock) return;
-  try {
-    await screen.orientation.lock(screen.orientation.type);
-  } catch {}
-}
-
-function unlockCaptureOrientation() {
-  if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+function getPhoneRotation() {
+  const screenAngle = typeof screen !== 'undefined' && screen.orientation
+    ? screen.orientation.angle
+    : undefined;
+  const windowAngle = typeof window.orientation === 'number' ? window.orientation : 0;
+  const angle = Number.isFinite(screenAngle) ? screenAngle : windowAngle;
+  const snapped = Math.round(angle / 90) * 90;
+  return (360 - (snapped % 360) + 360) % 360;
 }
 
 function stopLiveScan(state, restore = true) {
@@ -559,7 +556,6 @@ function stopLiveScan(state, restore = true) {
   state.liveWrap.hidden = true;
   state.canvas.hidden = false;
   void exitCaptureFullscreen(state.liveWrap);
-  unlockCaptureOrientation();
   setCaptureActive(state.photoActive);
   updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
@@ -599,7 +595,7 @@ function flashScanSuccess() {
 function completeLiveScan(state, config, value, text) {
   const frame = captureVideoFrame(state.liveVideo);
   state.image = frame;
-  state.rotation = LIVE_ROTATION;
+  state.rotation = getPhoneRotation();
   state.crop = null;
   document.getElementById(config.rawId).textContent = text.trim();
   document.getElementById(config.fieldId).value = value;
@@ -623,7 +619,7 @@ async function scanLiveFrame(state, config) {
   }
 
   state.liveBusy = true;
-  state.rotation = LIVE_ROTATION;
+  state.rotation = getPhoneRotation();
   state.crop = LIVE_CROP;
   const frame = captureVideoFrame(state);
   if (!frame) {
@@ -697,7 +693,6 @@ async function startLiveScan(state, config) {
 
   try {
     await enterCaptureFullscreen(state.liveWrap);
-    void lockCaptureOrientation();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
@@ -746,7 +741,6 @@ async function startPhotoCapture(state, onReady) {
 
   try {
     await enterCaptureFullscreen(state.photoWrap);
-    void lockCaptureOrientation();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       audio: false,
@@ -776,7 +770,7 @@ function capturePhoto(state, onReady) {
     return;
   }
   state.image = frame;
-  state.rotation = 0;
+  state.rotation = getPhoneRotation();
   state.invert = false;
   state.crop = null;
   stopPhotoCapture(state, false);
@@ -795,7 +789,6 @@ function stopPhotoCapture(state, restore = true) {
   state.photoWrap.hidden = true;
   state.canvas.hidden = false;
   void exitCaptureFullscreen(state.photoWrap);
-  unlockCaptureOrientation();
   if (restore) {
     restoreSavedState(state, state.photoSaved);
     state.photoSaved = null;
