@@ -62,15 +62,16 @@ Deux façons simples de faire cela, au choix :
 1. Renseignez **Étage**, **BU** et **Agence** en haut de l'écran. Elles restent préremplies d'un PC
   à l'autre, mais vous pouvez les modifier avant chaque ajout : leurs valeurs sont conservées
   séparément pour chaque PC et apparaissent dans l'export Excel.
-2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Placez
-  l'étiquette dans le viseur et maintenez le téléphone quelques instants. Utilisez **Arrêter** pour
-  quitter ce mode ; la caméra s'arrête automatiquement après deux lectures identiques. Le numéro
-  détecté est pré-rempli — vérifiez-le toujours.
+2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran et
+  l'orientation de l'écran est conservée pendant la capture. Placez l'étiquette dans le viseur et
+  maintenez le téléphone quelques instants. Utilisez **Arrêter** pour quitter ce mode ; la caméra
+  s'arrête automatiquement après deux lectures identiques. Le numéro détecté est pré-rempli —
+  vérifiez-le toujours.
   Pour une photo fixe, utilisez **Prendre une photo**, puis **Prendre la photo**. **Arrêter** permet
-  de quitter sans capturer. **Importer une photo** reste disponible comme solution de repli.
+  de quitter sans capturer.
 3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché,
-  ou utilisez **Prendre une photo**. Le nom est pré-rempli automatiquement ; vérifiez/corrigez si
-  besoin. **Importer une photo** permet aussi de choisir un fichier existant.
+  ou utilisez **Prendre une photo**. L'orientation de l'écran reste fixe pendant la capture. Le nom
+  est pré-rempli automatiquement ; vérifiez/corrigez si besoin.
 4. Si un résultat est incorrect, ouvrez le bloc **"Résultat incorrect ? Réglage manuel"** : vous
    pouvez alors tourner l'image, dessiner vous-même un cadre autour du texte, puis "Relire".
 5. Complétez éventuellement le bureau/la salle et un commentaire.

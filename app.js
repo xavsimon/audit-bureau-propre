@@ -10,9 +10,8 @@ const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
-function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, photoBtnId, photoWrapId, photoVideoId, photoStatusId, capturePhotoBtnId, stopPhotoBtnId) {
+function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, photoBtnId, photoWrapId, photoVideoId, photoStatusId, capturePhotoBtnId, stopPhotoBtnId) {
   return {
-    fileInput: document.getElementById(fileInputId),
     canvas: document.getElementById(canvasId),
     rotateBtn: document.getElementById(rotateBtnId),
     invertBtn: document.getElementById(invertBtnId),
@@ -52,12 +51,12 @@ function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, res
 }
 
 const assetState = createCaptureState(
-  'fileAsset', 'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset',
+  'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset',
   'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset',
   'startPhotoAsset', 'photoWrapAsset', 'photoVideoAsset', 'photoStatusAsset', 'capturePhotoAsset', 'stopPhotoAsset'
 );
 const nameState = createCaptureState(
-  'fileName', 'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName',
+  'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName',
   'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName',
   'startPhotoName', 'photoWrapName', 'photoVideoName', 'photoStatusName', 'capturePhotoName', 'stopPhotoName'
 );
@@ -67,25 +66,6 @@ function getImageDimensions(image) {
     width: image.videoWidth || image.naturalWidth || image.width,
     height: image.videoHeight || image.naturalHeight || image.height,
   };
-}
-
-function loadImageFile(input, state) {
-  return new Promise((resolve, reject) => {
-    const file = input.files && input.files[0];
-    if (!file) return reject(new Error('Aucun fichier'));
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      state.image = img;
-      state.rotation = 0;
-      state.invert = false;
-      state.crop = null;
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
 }
 
 // Dessine l'image dans le canvas visible, en appliquant la rotation choisie.
@@ -266,20 +246,6 @@ function buildOcrCanvas(state) {
 }
 
 function wireCapture(state, onReady) {
-  state.fileInput.addEventListener('change', async () => {
-    try {
-      await loadImageFile(state.fileInput, state);
-      renderPreview(state);
-      state.rotateBtn.disabled = false;
-      state.invertBtn.disabled = false;
-      state.resetCropBtn.disabled = false;
-      state.ocrBtn.disabled = false;
-      if (onReady) onReady();
-    } catch (e) {
-      alert("Impossible de charger l'image.");
-    }
-  });
-
   state.rotateBtn.addEventListener('click', () => {
     state.rotation = (state.rotation + 90) % 360;
     state.crop = null;
@@ -564,7 +530,17 @@ function updateCaptureButtons(state) {
   const cameraActive = state.liveActive || state.photoActive;
   state.liveBtn.disabled = cameraActive;
   state.photoBtn.disabled = cameraActive;
-  state.fileInput.disabled = cameraActive;
+}
+
+async function lockCaptureOrientation() {
+  if (!screen.orientation || !screen.orientation.lock) return;
+  try {
+    await screen.orientation.lock(screen.orientation.type);
+  } catch {}
+}
+
+function unlockCaptureOrientation() {
+  if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
 }
 
 function stopLiveScan(state, restore = true) {
@@ -583,6 +559,7 @@ function stopLiveScan(state, restore = true) {
   state.liveWrap.hidden = true;
   state.canvas.hidden = false;
   void exitCaptureFullscreen(state.liveWrap);
+  unlockCaptureOrientation();
   setCaptureActive(state.photoActive);
   updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
@@ -720,6 +697,7 @@ async function startLiveScan(state, config) {
 
   try {
     await enterCaptureFullscreen(state.liveWrap);
+    await lockCaptureOrientation();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
@@ -768,6 +746,7 @@ async function startPhotoCapture(state, onReady) {
 
   try {
     await enterCaptureFullscreen(state.photoWrap);
+    await lockCaptureOrientation();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       audio: false,
@@ -816,6 +795,7 @@ function stopPhotoCapture(state, restore = true) {
   state.photoWrap.hidden = true;
   state.canvas.hidden = false;
   void exitCaptureFullscreen(state.photoWrap);
+  unlockCaptureOrientation();
   if (restore) {
     restoreSavedState(state, state.photoSaved);
     state.photoSaved = null;
