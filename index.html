@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.12.0</span>
+  <span class="version-badge">Version 1.13.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -45,6 +45,12 @@
       <span>Veuillez patienter avant de toucher l'écran.</span>
     </div>
     <div class="live-scanner" id="liveWrapAsset" hidden>
+      <div class="scan-loading" hidden aria-live="polite">
+        <span class="ocr-spinner" aria-hidden="true"></span>
+        <strong>Préparation du scan</strong>
+        <span class="scan-loading-text">Chargement du moteur OCR...</span>
+        <span>Ne touchez pas encore l'image.</span>
+      </div>
       <video id="liveVideoAsset" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
       <div class="scan-frame" aria-hidden="true"></div>
       <div class="live-status" id="liveStatusAsset" aria-live="polite"></div>
@@ -85,6 +91,12 @@
       <span>Veuillez patienter avant de toucher l'écran.</span>
     </div>
     <div class="live-scanner" id="liveWrapName" hidden>
+      <div class="scan-loading" hidden aria-live="polite">
+        <span class="ocr-spinner" aria-hidden="true"></span>
+        <strong>Préparation du scan</strong>
+        <span class="scan-loading-text">Chargement du moteur OCR...</span>
+        <span>Ne touchez pas encore l'image.</span>
+      </div>
       <video id="liveVideoName" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
       <div class="scan-frame" aria-hidden="true"></div>
       <div class="live-status" id="liveStatusName" aria-live="polite"></div>

@@ -166,6 +166,25 @@ main {
 
 .live-scanner[hidden] { display: none; }
 
+.scan-loading[hidden] { display: none; }
+.scan-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.9);
+  color: #fff;
+  text-align: center;
+}
+.scan-loading strong { font-size: 1.1rem; }
+.scan-loading > span:last-child { font-size: 0.9rem; opacity: 0.9; }
+.scan-loading-text { font-size: 0.95rem; }
+
 .ocr-loading[hidden] { display: none; }
 .ocr-loading {
   position: fixed;
@@ -303,6 +322,8 @@ main {
 }
 
 .camera-controls {
+  position: relative;
+  z-index: 4;
   display: flex;
   gap: 10px;
   width: 100%;

@@ -1,7 +1,8 @@
-# Audit Bureau Propre — version 1.12.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.13.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
-scanner plein écran au toucher de l'image → analyse **automatique** des quatre angles et lecture
+scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
+premier, puis 0° et 270°, jamais à l'envers) et lecture
 du numéro d'asset ou du nom, puis export Excel en fin d'audit. Aucun recadrage ni rotation manuelle
 n'est nécessaire en usage normal.
 
@@ -63,7 +64,9 @@ Deux façons simples de faire cela, au choix :
   séparément pour chaque PC et apparaissent dans l'export Excel.
 2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Attendez
   la fin de l'initialisation OCR, puis cadrez l'étiquette et touchez l'image pour déclencher l'analyse.
-  Une barre indique l'avancement de la reconnaissance des quatre orientations. Si le numéro est
+  Un indicateur plein écran reste visible pendant le chargement de la caméra et de l'OCR : attendez
+  qu'il disparaisse avant de toucher l'image. La reconnaissance commence par 90°, puis teste les
+  deux autres orientations. Si le numéro est
   trouvé, l'écran flashe en vert, le numéro s'affiche en grand et le scan se ferme. Si rien n'est
   trouvé, l'écran flashe en rouge et vous pouvez retoucher l'image pour réessayer. Pendant une
   reconnaissance, touchez à nouveau l'image pour reprendre une photo : l'ancien résultat et sa
@@ -71,7 +74,7 @@ Deux façons simples de faire cela, au choix :
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image.
 3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en attendant
   l'initialisation OCR, puis en cadrant le nom affiché et en touchant l'image. Le nom est lu dans
-  l'orientation normale, sans test des quatre angles ; une barre indique l'avancement de la
+  l'orientation normale, sans recherche de rotation ; une barre indique l'avancement de la
   reconnaissance et le scan se ferme si le nom est trouvé.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image. Le nom est pré-rempli
   automatiquement ; vérifiez/corrigez si besoin.
@@ -99,7 +102,9 @@ lang/             données de langue Tesseract (eng + fra), en local
 
 ## Limites connues
 
-- Le scanner live de l'étiquette analyse une photo prise au toucher dans ses quatre orientations.
+- Le scanner live de l'étiquette analyse une photo prise au toucher dans trois orientations (90° en
+  premier, puis 0° et 270° ; l'image à l'envers n'est pas testée). Un écran de
+  chargement bloque les clics jusqu'à ce que la caméra et l'OCR soient prêts.
   La première analyse est plus longue, le temps de charger le moteur OCR.
 - Le scanner du nom utilise directement l'orientation normale ; la détection de la zone de texte
   prend néanmoins quelques secondes.

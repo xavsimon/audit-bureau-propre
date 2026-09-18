@@ -17,6 +17,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     cropBox: document.getElementById(cropBoxId),
     liveBtn: document.getElementById(liveBtnId),
     liveWrap: document.getElementById(liveWrapId),
+    scanLoading: document.getElementById(liveWrapId).querySelector('.scan-loading'),
     liveVideo: document.getElementById(liveVideoId),
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
@@ -31,6 +32,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveStream: null,
     liveActive: false,
     liveBusy: false,
+    scanReady: false,
     liveSaved: null,
     ocrReady: false,
     analysisGeneration: 0,
@@ -209,7 +211,7 @@ function wireCapture(state) {
     }
   });
   state.liveWrap.addEventListener('click', (e) => {
-    if (e.target.closest('button, .camera-controls')) return;
+    if (e.target.closest('button, .camera-controls, .scan-loading')) return;
     captureLivePhoto(state, getLiveConfig(state));
   });
 }
@@ -241,6 +243,13 @@ function setOcrLoading(state, active) {
   state.ocrLoading.hidden = !active;
 }
 
+function setScanLoading(state, active, message) {
+  const loading = state.scanLoading;
+  if (!loading) return;
+  loading.hidden = !active;
+  if (message) loading.querySelector('.scan-loading-text').textContent = message;
+}
+
 async function prepareOcr(state) {
   if (state.ocrReady) return true;
   setOcrLoading(state, true);
@@ -268,7 +277,7 @@ function withOcrLock(fn) {
 }
 
 // ---------- Détection automatique (orientation + zone de texte) ----------
-const ROTATIONS = [0, 90, 180, 270];
+const ROTATIONS = [90, 0, 270];
 const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
 
 function flattenLines(data) {
@@ -312,14 +321,15 @@ function scoreNameLines(lines) {
 }
 
 // Repère la meilleure zone de texte puis la relit en haute qualité. L'étiquette
-// teste les quatre orientations ; le nom est traité directement à 0 degré.
+// teste d'abord l'orientation la plus fréquente, puis les deux autres ; le nom
+// est traité directement à 0 degré.
 async function autoRecognize(state, scoreFn, detectOrientation, onProgress, isCurrent) {
   const worker = await getWorker();
   let best = null;
   const rotations = detectOrientation ? ROTATIONS : [0];
 
   await worker.setParameters({ tessedit_pageseg_mode: '11' });
-  onProgress(10, detectOrientation ? 'Préparation des 4 orientations...' : 'Recherche du nom...');
+  onProgress(10, detectOrientation ? 'Préparation des 3 orientations (90° en premier)...' : 'Recherche du nom...');
   for (let i = 0; i < rotations.length; i += 1) {
     if (!isCurrent()) return '';
     const rotation = rotations[i];
@@ -513,6 +523,7 @@ function stopLiveScan(state, restore = true) {
   state.analysisGeneration += 1;
   state.liveActive = false;
   state.liveBusy = false;
+  state.scanReady = false;
   if (state.liveStream) {
     state.liveStream.getTracks().forEach((track) => track.stop());
     state.liveStream = null;
@@ -523,6 +534,7 @@ function stopLiveScan(state, restore = true) {
   state.canvas.hidden = false;
   const exitPromise = exitCaptureFullscreen(state.liveWrap);
   setOcrLoading(state, false);
+  setScanLoading(state, false);
   setCaptureActive(false);
   updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
@@ -674,7 +686,12 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
 }
 
 async function captureLivePhoto(state, config) {
-  if (!state.liveActive || (state.liveBusy && state !== assetState)) return;
+  if (!state.liveActive) return;
+  if (!state.scanReady) {
+    state.liveStatus.textContent = 'Préparation du scan en cours...';
+    return;
+  }
+  if (state.liveBusy && state !== assetState) return;
   if (state.liveBusy && state === assetState) resetScanVerification(state, config);
   const frame = captureVideoFrame(state.liveVideo);
   if (!frame) {
@@ -711,15 +728,18 @@ async function startLiveScan(state, config) {
   state.invert = false;
   state.liveActive = true;
   state.liveBusy = false;
+  state.scanReady = false;
   updateCaptureButtons(state);
   state.canvas.hidden = true;
   state.liveWrap.hidden = false;
+  setScanLoading(state, true, 'Chargement du moteur OCR...');
   setCaptureActive(true);
   state.liveStatus.textContent = 'Connexion à la caméra...';
   const ocrReadyPromise = prepareOcr(state);
 
   try {
     await enterCaptureFullscreen(state.liveWrap);
+    setScanLoading(state, true, 'Ouverture de la caméra...');
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
@@ -731,11 +751,14 @@ async function startLiveScan(state, config) {
     state.liveStream = stream;
     state.liveVideo.srcObject = stream;
     await state.liveVideo.play();
+    setScanLoading(state, true, 'Finalisation du scan...');
     if (!await ocrReadyPromise) {
       await stopLiveScan(state, true);
       state.liveStatus.textContent = 'OCR indisponible. Réessayez.';
       return;
     }
+    state.scanReady = true;
+    setScanLoading(state, false);
     state.liveStatus.textContent = 'Cadrez le texte puis touchez l\'image pour analyser.';
   } catch (e) {
     stopLiveScan(state, true);
