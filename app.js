@@ -697,7 +697,7 @@ async function startLiveScan(state, config) {
 
   try {
     await enterCaptureFullscreen(state.liveWrap);
-    await lockCaptureOrientation();
+    void lockCaptureOrientation();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
@@ -746,7 +746,7 @@ async function startPhotoCapture(state, onReady) {
 
   try {
     await enterCaptureFullscreen(state.photoWrap);
-    await lockCaptureOrientation();
+    void lockCaptureOrientation();
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       audio: false,
