@@ -265,6 +265,24 @@ async function prepareOcr(state) {
   }
 }
 
+function scheduleOcrPreload() {
+  const preload = () => {
+    getWorker()
+      .then(() => {
+        assetState.ocrReady = true;
+        nameState.ocrReady = true;
+      })
+      .catch(() => {
+        workerPromise = null;
+      });
+  };
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(preload, { timeout: 2500 });
+  } else {
+    window.setTimeout(preload, 800);
+  }
+}
+
 // Un seul worker Tesseract est partagé entre l'étiquette et l'écran : sans
 // verrou, deux analyses lancées en même temps (ex. deux photos prises coup sur
 // coup) se marchent dessus (paramètres PSM écrasés l'un par l'autre). Cette
@@ -1050,3 +1068,4 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
 });
 
 renderTable();
+scheduleOcrPreload();
