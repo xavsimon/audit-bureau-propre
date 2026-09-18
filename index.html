@@ -40,10 +40,22 @@
       <video id="liveVideoAsset" class="live-video" playsinline muted></video>
       <div class="scan-frame" aria-hidden="true"></div>
       <div class="live-status" id="liveStatusAsset" aria-live="polite"></div>
-      <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
+      <div class="camera-controls">
+        <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
+      </div>
     </div>
-    <label class="btn btn-primary file-btn full-width">
-      📷 Photo étiquette
+    <button class="btn btn-primary full-width photo-start" id="startPhotoAsset" type="button">📷 Prendre une photo</button>
+    <div class="photo-capture" id="photoWrapAsset" hidden>
+      <video id="photoVideoAsset" class="live-video" playsinline muted></video>
+      <div class="scan-frame" aria-hidden="true"></div>
+      <div class="photo-status" id="photoStatusAsset" aria-live="polite"></div>
+      <div class="camera-controls">
+        <button class="btn btn-capture-photo" id="capturePhotoAsset" type="button">Prendre la photo</button>
+        <button class="btn btn-stop-live" id="stopPhotoAsset" type="button">Arrêter</button>
+      </div>
+    </div>
+    <label class="btn file-btn full-width">
+      📁 Importer une photo
       <input type="file" accept="image/*" capture="environment" id="fileAsset">
     </label>
     <p class="auto-hint">L'orientation et la zone du texte sont détectées automatiquement après la photo.</p>
@@ -78,10 +90,22 @@
       <video id="liveVideoName" class="live-video" playsinline muted></video>
       <div class="scan-frame" aria-hidden="true"></div>
       <div class="live-status" id="liveStatusName" aria-live="polite"></div>
-      <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>
+      <div class="camera-controls">
+        <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>
+      </div>
     </div>
-    <label class="btn btn-primary file-btn full-width">
-      📷 Photo écran
+    <button class="btn btn-primary full-width photo-start" id="startPhotoName" type="button">📷 Prendre une photo</button>
+    <div class="photo-capture" id="photoWrapName" hidden>
+      <video id="photoVideoName" class="live-video" playsinline muted></video>
+      <div class="scan-frame" aria-hidden="true"></div>
+      <div class="photo-status" id="photoStatusName" aria-live="polite"></div>
+      <div class="camera-controls">
+        <button class="btn btn-capture-photo" id="capturePhotoName" type="button">Prendre la photo</button>
+        <button class="btn btn-stop-live" id="stopPhotoName" type="button">Arrêter</button>
+      </div>
+    </div>
+    <label class="btn file-btn full-width">
+      📁 Importer une photo
       <input type="file" accept="image/*" capture="environment" id="fileName">
     </label>
     <p class="auto-hint">L'orientation et la zone du nom sont détectées automatiquement après la photo.</p>

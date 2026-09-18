@@ -10,7 +10,7 @@ const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
-function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId) {
+function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, photoBtnId, photoWrapId, photoVideoId, photoStatusId, capturePhotoBtnId, stopPhotoBtnId) {
   return {
     fileInput: document.getElementById(fileInputId),
     canvas: document.getElementById(canvasId),
@@ -25,6 +25,12 @@ function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, res
     liveVideo: document.getElementById(liveVideoId),
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
+    photoBtn: document.getElementById(photoBtnId),
+    photoWrap: document.getElementById(photoWrapId),
+    photoVideo: document.getElementById(photoVideoId),
+    photoStatus: document.getElementById(photoStatusId),
+    capturePhotoBtn: document.getElementById(capturePhotoBtnId),
+    stopPhotoBtn: document.getElementById(stopPhotoBtnId),
     image: null,
     rotation: 0,
     invert: false,
@@ -39,16 +45,21 @@ function createCaptureState(fileInputId, canvasId, rotateBtnId, invertBtnId, res
     liveStableCount: 0,
     liveStableMisses: 0,
     liveSaved: null,
+    photoStream: null,
+    photoActive: false,
+    photoSaved: null,
   };
 }
 
 const assetState = createCaptureState(
   'fileAsset', 'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset',
-  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset'
+  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset',
+  'startPhotoAsset', 'photoWrapAsset', 'photoVideoAsset', 'photoStatusAsset', 'capturePhotoAsset', 'stopPhotoAsset'
 );
 const nameState = createCaptureState(
   'fileName', 'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName',
-  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName'
+  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName',
+  'startPhotoName', 'photoWrapName', 'photoVideoName', 'photoStatusName', 'capturePhotoName', 'stopPhotoName'
 );
 
 function getImageDimensions(image) {
@@ -286,6 +297,9 @@ function wireCapture(state, onReady) {
 
   state.liveBtn.addEventListener('click', () => startLiveScan(state, getLiveConfig(state)));
   state.stopLiveBtn.addEventListener('click', () => stopLiveScan(state, true));
+  state.photoBtn.addEventListener('click', () => startPhotoCapture(state, onReady));
+  state.capturePhotoBtn.addEventListener('click', () => capturePhoto(state, onReady));
+  state.stopPhotoBtn.addEventListener('click', () => stopPhotoCapture(state, true));
 
   wireCropSelection(state);
 }
@@ -515,15 +529,42 @@ function normalizeLiveValue(value) {
   return value.replace(/\s+/g, ' ').trim().toLocaleUpperCase('fr-FR');
 }
 
-function restoreLiveState(state) {
-  if (!state.liveSaved) return;
-  const saved = state.liveSaved;
-  state.liveSaved = null;
+function restoreSavedState(state, saved) {
+  if (!saved) return;
   state.image = saved.image;
   state.rotation = saved.rotation;
   state.invert = saved.invert;
   state.crop = saved.crop;
   if (state.image) renderPreview(state);
+}
+
+function setCaptureActive(active) {
+  document.body.classList.toggle('capture-active', active);
+}
+
+async function enterCaptureFullscreen(element) {
+  if (!element.requestFullscreen) return;
+  try {
+    await element.requestFullscreen();
+  } catch (e) {
+    // Le mode plein écran visuel reste disponible si le navigateur le refuse.
+  }
+}
+
+async function exitCaptureFullscreen(element) {
+  if (document.fullscreenElement !== element || !document.exitFullscreen) return;
+  try {
+    await document.exitFullscreen();
+  } catch (e) {
+    // Certains navigateurs quittent déjà le plein écran avec le bouton système.
+  }
+}
+
+function updateCaptureButtons(state) {
+  const cameraActive = state.liveActive || state.photoActive;
+  state.liveBtn.disabled = cameraActive;
+  state.photoBtn.disabled = cameraActive;
+  state.fileInput.disabled = cameraActive;
 }
 
 function stopLiveScan(state, restore = true) {
@@ -541,10 +582,14 @@ function stopLiveScan(state, restore = true) {
   state.liveVideo.srcObject = null;
   state.liveWrap.hidden = true;
   state.canvas.hidden = false;
-  state.fileInput.disabled = false;
-  state.liveBtn.disabled = false;
+  void exitCaptureFullscreen(state.liveWrap);
+  setCaptureActive(state.photoActive);
+  updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
-  if (restore) restoreLiveState(state);
+  if (restore) {
+    restoreSavedState(state, state.liveSaved);
+    state.liveSaved = null;
+  }
   const hasImage = Boolean(state.image);
   state.rotateBtn.disabled = !hasImage;
   state.invertBtn.disabled = !hasImage;
@@ -557,13 +602,13 @@ function stopLiveScan(state, restore = true) {
   state.liveStatus.textContent = '';
 }
 
-function captureVideoFrame(state) {
-  const { videoWidth, videoHeight } = state.liveVideo;
+function captureVideoFrame(video) {
+  const { videoWidth, videoHeight } = video;
   if (!videoWidth || !videoHeight) return null;
   const frame = document.createElement('canvas');
   frame.width = videoWidth;
   frame.height = videoHeight;
-  frame.getContext('2d').drawImage(state.liveVideo, 0, 0, videoWidth, videoHeight);
+  frame.getContext('2d').drawImage(video, 0, 0, videoWidth, videoHeight);
   return frame;
 }
 
@@ -575,7 +620,7 @@ function flashScanSuccess() {
 }
 
 function completeLiveScan(state, config, value, text) {
-  const frame = captureVideoFrame(state);
+  const frame = captureVideoFrame(state.liveVideo);
   state.image = frame;
   state.rotation = LIVE_ROTATION;
   state.crop = null;
@@ -667,13 +712,14 @@ async function startLiveScan(state, config) {
   state.liveStableValue = '';
   state.liveStableCount = 0;
   state.liveStableMisses = 0;
-  state.liveBtn.disabled = true;
-  state.fileInput.disabled = true;
+  updateCaptureButtons(state);
   state.canvas.hidden = true;
   state.liveWrap.hidden = false;
+  setCaptureActive(true);
   state.liveStatus.textContent = 'Connexion à la caméra...';
 
   try {
+    await enterCaptureFullscreen(state.liveWrap);
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
@@ -694,6 +740,95 @@ async function startLiveScan(state, config) {
       : "Impossible d'ouvrir la caméra.";
     alert(message);
   }
+}
+
+async function startPhotoCapture(state, onReady) {
+  if (state.photoActive) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('La caméra nécessite une page HTTPS ou localhost dans un navigateur compatible.');
+    return;
+  }
+
+  state.photoSaved = {
+    image: state.image,
+    rotation: state.rotation,
+    invert: state.invert,
+    crop: state.crop,
+  };
+  state.image = null;
+  state.crop = null;
+  state.rotation = 0;
+  state.invert = false;
+  state.photoActive = true;
+  updateCaptureButtons(state);
+  state.canvas.hidden = true;
+  state.photoWrap.hidden = false;
+  setCaptureActive(true);
+  state.photoStatus.textContent = 'Connexion à la caméra...';
+
+  try {
+    await enterCaptureFullscreen(state.photoWrap);
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+    if (!state.photoActive) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    state.photoStream = stream;
+    state.photoVideo.srcObject = stream;
+    await state.photoVideo.play();
+    state.photoStatus.textContent = 'Cadrez le texte puis prenez la photo.';
+  } catch (e) {
+    stopPhotoCapture(state, true);
+    const message = e.name === 'NotAllowedError'
+      ? "L'accès à la caméra a été refusé."
+      : "Impossible d'ouvrir la caméra.";
+    alert(message);
+  }
+}
+
+function capturePhoto(state, onReady) {
+  if (!state.photoActive) return;
+  const frame = captureVideoFrame(state.photoVideo);
+  if (!frame) {
+    state.photoStatus.textContent = 'Mise au point de la caméra...';
+    return;
+  }
+  state.image = frame;
+  state.rotation = 0;
+  state.invert = false;
+  state.crop = null;
+  stopPhotoCapture(state, false);
+  renderPreview(state);
+  if (onReady) onReady();
+}
+
+function stopPhotoCapture(state, restore = true) {
+  state.photoActive = false;
+  if (state.photoStream) {
+    state.photoStream.getTracks().forEach((track) => track.stop());
+    state.photoStream = null;
+  }
+  state.photoVideo.pause();
+  state.photoVideo.srcObject = null;
+  state.photoWrap.hidden = true;
+  state.canvas.hidden = false;
+  void exitCaptureFullscreen(state.photoWrap);
+  if (restore) {
+    restoreSavedState(state, state.photoSaved);
+    state.photoSaved = null;
+  }
+  if (!restore) state.photoSaved = null;
+  setCaptureActive(state.liveActive);
+  updateCaptureButtons(state);
+  state.photoStatus.textContent = '';
+  const hasImage = Boolean(state.image);
+  state.rotateBtn.disabled = !hasImage;
+  state.invertBtn.disabled = !hasImage;
+  state.resetCropBtn.disabled = !hasImage;
+  state.ocrBtn.disabled = !hasImage;
 }
 
 async function runAssetOcr() {

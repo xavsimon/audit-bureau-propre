@@ -19,6 +19,8 @@ body {
   padding-bottom: 40px;
 }
 
+body.capture-active { overflow: hidden; }
+
 body.scan-success-flash::after {
   content: '';
   position: fixed;
@@ -103,6 +105,7 @@ main {
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-live { background: #1f6f78; color: #fff; margin-bottom: 8px; }
 .btn-live.full-width { display: block; width: 100%; text-align: center; }
+.photo-start { display: block; width: 100%; text-align: center; margin-bottom: 8px; }
 .btn-share { background: #0f6b5b; color: #fff; }
 .btn-secondary { background: var(--secondary); color: #fff; width: 100%; margin-bottom: 8px; }
 .btn-danger { background: var(--danger); color: #fff; }
@@ -140,18 +143,24 @@ main {
 }
 
 .live-scanner {
-  position: relative;
-  aspect-ratio: 4 / 3;
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   overflow: hidden;
   background: #111;
-  border-radius: 8px;
-  margin-bottom: 10px;
 }
+
+.live-scanner[hidden], .photo-capture[hidden] { display: none; }
 
 .live-video {
   display: block;
   width: 100%;
   height: 100%;
+  min-height: 0;
+  flex: 1;
   object-fit: contain;
 }
 
@@ -170,21 +179,56 @@ main {
 .live-status {
   position: absolute;
   left: 10px;
-  right: 92px;
-  bottom: 10px;
+  right: 10px;
+  bottom: 82px;
   color: #fff;
   font-size: 0.8rem;
   text-shadow: 0 1px 3px #000;
 }
 
 .btn-stop-live {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  padding: 8px 10px;
   background: rgba(0, 0, 0, 0.72);
   color: #fff;
 }
+
+.photo-capture {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  background: #111;
+}
+
+.photo-status {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 82px;
+  color: #fff;
+  font-size: 0.85rem;
+  text-align: center;
+  text-shadow: 0 1px 3px #000;
+}
+
+.camera-controls {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(0, 0, 0, 0.84);
+}
+
+.camera-controls .btn {
+  flex: 1;
+  min-height: 48px;
+}
+
+.camera-controls .btn:only-child { flex: 0 1 240px; margin: 0 auto; }
+
+.btn-capture-photo { background: var(--secondary); color: #fff; }
 
 .manual-tools {
   margin-top: 10px;
