@@ -80,8 +80,8 @@ Deux façons simples de faire cela, au choix :
 8. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
   feuille de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé
   et peut être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
-9. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
-   une fois l'export récupéré).
+9. Le bouton "Vider la liste" efface définitivement les entrées et les informations du PC stockées
+  sur l'appareil (à utiliser une fois l'export récupéré).
 
 ## Structure du dossier
 

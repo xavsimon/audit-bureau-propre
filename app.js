@@ -879,10 +879,12 @@ document.getElementById('addEntry').addEventListener('click', () => {
 document.getElementById('cancelEdit').addEventListener('click', resetEntryForm);
 
 document.getElementById('clearAll').addEventListener('click', () => {
-  if (!entries.length) return;
-  if (!confirm('Supprimer définitivement toutes les entrées de la liste ?')) return;
+  if (entries.length && !confirm('Supprimer définitivement toutes les entrées de la liste ?')) return;
   entries = [];
   resetEntryForm();
+  setAuditContextFields({});
+  saveAuditContext(auditContext);
+  document.querySelector('#audit-context details').open = true;
   saveEntries(entries);
   renderTable();
 });
