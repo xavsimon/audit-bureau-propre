@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.15.0</span>
+  <span class="version-badge">Version 1.16.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -61,6 +61,10 @@
         </div>
         <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
       </div>
+      <div class="scan-result live-scan-result" hidden role="button" tabindex="0" aria-label="Garder la valeur détectée">
+        <span>Valeur détectée - toucher pour garder</span>
+        <strong></strong>
+      </div>
       <div class="camera-controls">
         <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
       </div>
@@ -106,6 +110,10 @@
           <span class="scan-progress-percent">0 %</span>
         </div>
         <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
+      </div>
+      <div class="scan-result live-scan-result" hidden role="button" tabindex="0" aria-label="Garder la valeur détectée">
+        <span>Valeur détectée - toucher pour garder</span>
+        <strong></strong>
       </div>
       <div class="camera-controls">
         <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>

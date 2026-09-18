@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.15.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.16.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -67,8 +67,9 @@ Deux façons simples de faire cela, au choix :
   Un indicateur plein écran reste visible pendant le chargement de la caméra et de l'OCR : attendez
   qu'il disparaisse avant de toucher l'image. La reconnaissance commence par 90°, puis teste les
   deux autres orientations. Si le numéro est
-  trouvé, l'écran flashe en vert, le numéro s'affiche en grand et le scan se ferme. Si rien n'est
-  trouvé, l'écran flashe en rouge et vous pouvez retoucher l'image pour réessayer. Pendant une
+  trouvé, un encart vert s'affiche en bas du scanner. Touchez cet encart pour garder la valeur et
+  fermer le scanner ; touchez l'image pour refaire le scan. Si rien n'est trouvé, l'écran flashe en
+  rouge et vous pouvez retoucher l'image pour réessayer. Pendant une
   reconnaissance, touchez à nouveau l'image pour reprendre une photo : l'ancien résultat et sa
   vérification sont effacés. Utilisez **Arrêter** pour quitter ce mode.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image.
@@ -77,7 +78,8 @@ Deux façons simples de faire cela, au choix :
   l'orientation normale, sans recherche de rotation ; une barre indique l'avancement de la
   reconnaissance et le scan se ferme si le nom est trouvé.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image. Le nom est pré-rempli
-  automatiquement ; vérifiez/corrigez si besoin.
+  automatiquement ; vérifiez/corrigez si besoin. Lorsqu'un nom est trouvé, touchez l'encart vert
+  pour le garder et fermer le scanner, ou touchez l'image pour refaire le scan.
 
   Le moteur OCR est préchargé en arrière-plan après l'ouverture de la fenêtre principale afin de
   réduire l'attente au démarrage du premier scan.

@@ -18,6 +18,8 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveBtn: document.getElementById(liveBtnId),
     liveWrap: document.getElementById(liveWrapId),
     scanLoading: document.getElementById(liveWrapId).querySelector('.scan-loading'),
+    liveResult: document.getElementById(liveWrapId).querySelector('.live-scan-result'),
+    liveResultValue: document.getElementById(liveWrapId).querySelector('.live-scan-result strong'),
     liveVideo: document.getElementById(liveVideoId),
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
@@ -261,8 +263,17 @@ function wireCapture(state) {
     }
   });
   state.liveWrap.addEventListener('click', (e) => {
+    if (e.target.closest('.live-scan-result')) {
+      acceptLiveResult(state, getLiveConfig(state));
+      return;
+    }
     if (e.target.closest('button, .camera-controls, .scan-loading')) return;
     captureLivePhoto(state, getLiveConfig(state));
+  });
+  state.liveWrap.addEventListener('keydown', (e) => {
+    if (!e.target.closest('.live-scan-result') || !['Enter', ' '].includes(e.key)) return;
+    e.preventDefault();
+    acceptLiveResult(state, getLiveConfig(state));
   });
 }
 
@@ -694,7 +705,24 @@ function clearLiveResult(state, config) {
   state.analysisGeneration += 1;
   document.getElementById(config.resultId).hidden = true;
   document.getElementById(config.resultValueId).textContent = '';
+  state.liveResult.hidden = true;
+  state.liveResultValue.textContent = '';
   resetScanProgress(state, config);
+}
+
+function acceptLiveResult(state, config) {
+  const value = state.liveResultValue.textContent;
+  if (!value) return;
+  document.getElementById(config.resultValueId).textContent = value;
+  document.getElementById(config.resultId).hidden = false;
+  stopLiveScan(state, false);
+}
+
+function prepareLiveRetake(state, config) {
+  clearLiveResult(state, config);
+  document.getElementById(config.fieldId).value = '';
+  state.rotation = 0;
+  state.crop = null;
 }
 
 function resetScanVerification(state, config) {
@@ -758,9 +786,15 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     const value = config.extract(text);
     if (value) {
       document.getElementById(config.fieldId).value = value;
-      document.getElementById(config.resultValueId).textContent = value;
-      document.getElementById(config.resultId).hidden = false;
-      if (liveCapture) await stopLiveScan(state, false);
+      if (liveCapture) {
+        resetScanProgress(state, config);
+        state.liveResultValue.textContent = value;
+        state.liveResult.hidden = false;
+        state.liveStatus.textContent = 'Valeur trouvée. Touchez l\'encart vert pour la garder, ou l\'image pour rescanner.';
+      } else {
+        document.getElementById(config.resultValueId).textContent = value;
+        document.getElementById(config.resultId).hidden = false;
+      }
       flashScanSuccess();
     } else {
       const message = liveCapture
@@ -794,6 +828,7 @@ async function captureLivePhoto(state, config) {
     return;
   }
   if (state.liveBusy && state !== assetState) return;
+  if (!state.liveBusy) prepareLiveRetake(state, config);
   if (state.liveBusy && state === assetState) resetScanVerification(state, config);
   const frame = captureVideoFrame(state.liveVideo);
   if (!frame) {
