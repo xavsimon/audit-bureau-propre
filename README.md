@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.16.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.17.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -52,10 +52,11 @@ Deux façons simples de faire cela, au choix :
 
 > **Scanner live et HTTPS** : les navigateurs autorisent la caméra sur `https://` ou sur
 > `http://localhost`, mais pas normalement sur une adresse IP en `http://`. L'adresse Wi-Fi
-> affichée par `server.js` permet d'ouvrir l'application. Sur une adresse IP en HTTP, le même bouton
-> ouvre la caméra native du téléphone comme solution de repli ; le scanner live reste disponible via
-> HTTPS ou `http://localhost`. Sur le PC qui héberge l'application, `http://localhost:8080` peut
-> utiliser la caméra locale.
+> affichée par `server.js` permet d'ouvrir l'application, mais sur iOS une adresse IP en HTTP
+> ouvre la caméra photo native comme solution de repli : cette fenêtre se ferme après la photo,
+> c'est une restriction de sécurité du navigateur. Pour garder le scanner live ouvert et afficher
+> l'encart de confirmation dans cette fenêtre, utilisez une adresse HTTPS. Sur le PC qui héberge
+> l'application, `http://localhost:8080` peut utiliser la caméra locale.
 
 ## Utilisation pendant l'audit
 

@@ -840,14 +840,17 @@ async function captureLivePhoto(state, config) {
 
 function openFallbackCapture(state, config) {
   clearLiveResult(state, config);
-  document.getElementById(config.progressId).textContent = 'Ouverture de la caméra...';
+  const progress = document.getElementById(config.progressId);
+  progress.textContent = window.isSecureContext
+    ? 'Scanner live indisponible. Ouverture de la caméra photo...'
+    : 'Mode live indisponible en HTTP sur iOS. La caméra photo va s\'ouvrir ; utilisez HTTPS pour garder le scanner ouvert.';
   state.fallbackInput.value = '';
   state.fallbackInput.click();
 }
 
 async function startLiveScan(state, config) {
   if (state.liveActive) return;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     openFallbackCapture(state, config);
     return;
   }
