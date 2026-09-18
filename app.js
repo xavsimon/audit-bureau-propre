@@ -10,7 +10,7 @@ const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
-function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, photoBtnId, photoWrapId, photoVideoId, photoStatusId, capturePhotoBtnId, stopPhotoBtnId) {
+function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId) {
   return {
     canvas: document.getElementById(canvasId),
     rotateBtn: document.getElementById(rotateBtnId),
@@ -24,12 +24,6 @@ function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, 
     liveVideo: document.getElementById(liveVideoId),
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
-    photoBtn: document.getElementById(photoBtnId),
-    photoWrap: document.getElementById(photoWrapId),
-    photoVideo: document.getElementById(photoVideoId),
-    photoStatus: document.getElementById(photoStatusId),
-    capturePhotoBtn: document.getElementById(capturePhotoBtnId),
-    stopPhotoBtn: document.getElementById(stopPhotoBtnId),
     image: null,
     rotation: 0,
     invert: false,
@@ -39,21 +33,16 @@ function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, 
     liveActive: false,
     liveBusy: false,
     liveSaved: null,
-    photoStream: null,
-    photoActive: false,
-    photoSaved: null,
   };
 }
 
 const assetState = createCaptureState(
   'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset',
-  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset',
-  'startPhotoAsset', 'photoWrapAsset', 'photoVideoAsset', 'photoStatusAsset', 'capturePhotoAsset', 'stopPhotoAsset'
+  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset'
 );
 const nameState = createCaptureState(
   'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName',
-  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName',
-  'startPhotoName', 'photoWrapName', 'photoVideoName', 'photoStatusName', 'capturePhotoName', 'stopPhotoName'
+  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName'
 );
 
 function getImageDimensions(image) {
@@ -240,7 +229,7 @@ function buildOcrCanvas(state) {
   return off;
 }
 
-function wireCapture(state, onReady) {
+function wireCapture(state) {
   state.rotateBtn.addEventListener('click', () => {
     state.rotation = (state.rotation + 90) % 360;
     state.crop = null;
@@ -262,15 +251,11 @@ function wireCapture(state, onReady) {
     if (e.target.closest('button, .camera-controls')) return;
     captureLivePhoto(state, getLiveConfig(state));
   });
-  state.photoBtn.addEventListener('click', () => startPhotoCapture(state, onReady));
-  state.capturePhotoBtn.addEventListener('click', () => capturePhoto(state, onReady));
-  state.stopPhotoBtn.addEventListener('click', () => stopPhotoCapture(state, true));
-
   wireCropSelection(state);
 }
 
-wireCapture(assetState, () => runAssetOcr());
-wireCapture(nameState, () => runNameOcr());
+wireCapture(assetState);
+wireCapture(nameState);
 
 // ---------- Tesseract worker (chargé une seule fois, 100% local) ----------
 let workerPromise = null;
@@ -523,19 +508,7 @@ async function exitCaptureFullscreen(element) {
 }
 
 function updateCaptureButtons(state) {
-  const cameraActive = state.liveActive || state.photoActive;
-  state.liveBtn.disabled = cameraActive;
-  state.photoBtn.disabled = cameraActive;
-}
-
-function getPhoneRotation() {
-  const screenAngle = typeof screen !== 'undefined' && screen.orientation
-    ? screen.orientation.angle
-    : undefined;
-  const windowAngle = typeof window.orientation === 'number' ? window.orientation : 0;
-  const angle = Number.isFinite(screenAngle) ? screenAngle : windowAngle;
-  const snapped = Math.round(angle / 90) * 90;
-  return (360 - (snapped % 360) + 360) % 360;
+  state.liveBtn.disabled = state.liveActive;
 }
 
 function stopLiveScan(state, restore = true) {
@@ -550,7 +523,7 @@ function stopLiveScan(state, restore = true) {
   state.liveWrap.hidden = true;
   state.canvas.hidden = false;
   const exitPromise = exitCaptureFullscreen(state.liveWrap);
-  setCaptureActive(state.photoActive);
+  setCaptureActive(false);
   updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
   if (restore) {
@@ -593,6 +566,13 @@ function flashScanFailure() {
   window.setTimeout(() => document.body.classList.remove('scan-failure-flash'), 700);
 }
 
+function flashScanCapture(state) {
+  state.liveWrap.classList.remove('capture-photo-flash');
+  void state.liveWrap.offsetWidth;
+  state.liveWrap.classList.add('capture-photo-flash');
+  window.setTimeout(() => state.liveWrap.classList.remove('capture-photo-flash'), 300);
+}
+
 function flashLiveFailure(state) {
   state.liveWrap.classList.remove('capture-failure-flash');
   void state.liveWrap.offsetWidth;
@@ -616,6 +596,7 @@ async function captureLivePhoto(state, config) {
     state.liveBusy = false;
     return;
   }
+  flashScanCapture(state);
   state.rotation = 0;
   state.crop = null;
   state.image = frame;
@@ -692,95 +673,6 @@ async function startLiveScan(state, config) {
       : "Impossible d'ouvrir la caméra.";
     alert(message);
   }
-}
-
-async function startPhotoCapture(state, onReady) {
-  if (state.photoActive) return;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert('La caméra nécessite une page HTTPS ou localhost dans un navigateur compatible.');
-    return;
-  }
-
-  state.photoSaved = {
-    image: state.image,
-    rotation: state.rotation,
-    invert: state.invert,
-    crop: state.crop,
-  };
-  state.image = null;
-  state.crop = null;
-  state.rotation = 0;
-  state.invert = false;
-  state.photoActive = true;
-  updateCaptureButtons(state);
-  state.canvas.hidden = true;
-  state.photoWrap.hidden = false;
-  setCaptureActive(true);
-  state.photoStatus.textContent = 'Connexion à la caméra...';
-
-  try {
-    await enterCaptureFullscreen(state.photoWrap);
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false,
-    });
-    if (!state.photoActive) {
-      stream.getTracks().forEach((track) => track.stop());
-      return;
-    }
-    state.photoStream = stream;
-    state.photoVideo.srcObject = stream;
-    await state.photoVideo.play();
-    state.photoStatus.textContent = 'Cadrez le texte puis prenez la photo.';
-  } catch (e) {
-    stopPhotoCapture(state, true);
-    const message = e.name === 'NotAllowedError'
-      ? "L'accès à la caméra a été refusé."
-      : "Impossible d'ouvrir la caméra.";
-    alert(message);
-  }
-}
-
-function capturePhoto(state, onReady) {
-  if (!state.photoActive) return;
-  const frame = captureVideoFrame(state.photoVideo);
-  if (!frame) {
-    state.photoStatus.textContent = 'Mise au point de la caméra...';
-    return;
-  }
-  state.image = frame;
-  state.rotation = getPhoneRotation();
-  state.invert = false;
-  state.crop = null;
-  stopPhotoCapture(state, false);
-  renderPreview(state);
-  if (onReady) onReady();
-}
-
-function stopPhotoCapture(state, restore = true) {
-  state.photoActive = false;
-  if (state.photoStream) {
-    state.photoStream.getTracks().forEach((track) => track.stop());
-    state.photoStream = null;
-  }
-  state.photoVideo.pause();
-  state.photoVideo.srcObject = null;
-  state.photoWrap.hidden = true;
-  state.canvas.hidden = false;
-  void exitCaptureFullscreen(state.photoWrap);
-  if (restore) {
-    restoreSavedState(state, state.photoSaved);
-    state.photoSaved = null;
-  }
-  if (!restore) state.photoSaved = null;
-  setCaptureActive(state.liveActive);
-  updateCaptureButtons(state);
-  state.photoStatus.textContent = '';
-  const hasImage = Boolean(state.image);
-  state.rotateBtn.disabled = !hasImage;
-  state.invertBtn.disabled = !hasImage;
-  state.resetCropBtn.disabled = !hasImage;
-  state.ocrBtn.disabled = !hasImage;
 }
 
 async function runAssetOcr() {

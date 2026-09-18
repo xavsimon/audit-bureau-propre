@@ -47,6 +47,11 @@ body.scan-failure-flash::after {
   100% { opacity: 0; }
 }
 
+@keyframes scan-capture-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 @keyframes scan-failure-flash {
   0% { opacity: 0; }
   18% { opacity: 1; }
@@ -121,7 +126,6 @@ main {
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-live { background: #1f6f78; color: #fff; margin-bottom: 8px; }
 .btn-live.full-width { display: block; width: 100%; text-align: center; }
-.photo-start { display: block; width: 100%; text-align: center; margin-bottom: 8px; }
 .btn-share { background: #0f6b5b; color: #fff; }
 .btn-secondary { background: var(--secondary); color: #fff; width: 100%; margin-bottom: 8px; }
 .btn-danger { background: var(--danger); color: #fff; }
@@ -143,15 +147,6 @@ main {
 }
 .btn-cancel-edit[hidden] { display: none; }
 
-.file-btn { position: relative; overflow: hidden; }
-.file-btn input[type="file"] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-.file-btn.full-width { display: block; width: 100%; text-align: center; margin-bottom: 8px; }
-
 .auto-hint {
   font-size: 0.8rem;
   color: #777;
@@ -169,7 +164,7 @@ main {
   background: #111;
 }
 
-.live-scanner[hidden], .photo-capture[hidden] { display: none; }
+.live-scanner[hidden] { display: none; }
 
 .live-scanner.capture-failure-flash::after {
   content: '';
@@ -179,6 +174,16 @@ main {
   background: rgba(220, 38, 38, 0.78);
   pointer-events: none;
   animation: scan-failure-flash 650ms ease-out forwards;
+}
+
+.live-scanner.capture-photo-flash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+  animation: scan-capture-flash 260ms ease-out forwards;
 }
 
 .live-video {
@@ -236,28 +241,6 @@ main {
   color: #fff;
 }
 
-.photo-capture {
-  position: fixed;
-  inset: 0;
-  z-index: 900;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  overflow: hidden;
-  background: #111;
-}
-
-.photo-status {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 82px;
-  color: #fff;
-  font-size: 0.85rem;
-  text-align: center;
-  text-shadow: 0 1px 3px #000;
-}
-
 .camera-controls {
   display: flex;
   gap: 10px;
@@ -273,8 +256,6 @@ main {
 
 .camera-controls .btn:only-child { flex: 0 1 240px; margin: 0 auto; }
 
-.btn-capture-photo { background: var(--secondary); color: #fff; }
-
 .manual-tools {
   margin-top: 10px;
   border-top: 1px dashed var(--border);
@@ -285,6 +266,14 @@ main {
   color: #777;
   cursor: pointer;
 }
+.audit-context details summary, .photo-preview summary {
+  color: var(--primary-dark);
+  cursor: pointer;
+  font-weight: 600;
+}
+.audit-context details summary { font-size: 1.05rem; }
+.photo-preview { margin: 8px 0; }
+.photo-preview summary { font-size: 0.8rem; color: #777; }
 .manual-tools .capture-row { margin-top: 8px; }
 
 .preview {

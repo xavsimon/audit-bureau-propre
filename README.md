@@ -1,10 +1,9 @@
 # Audit Bureau Propre — application locale (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
-scanner live ou photo de l'étiquette d'asset → lecture **automatique** du numéro d'asset
-(orientation et zone de texte détectées toutes seules), scanner live ou photo de l'écran de
-verrouillage → lecture **automatique** du nom, puis export Excel en fin d'audit. Aucun recadrage
-ni rotation manuelle n'est nécessaire en usage normal.
+scanner plein écran au toucher de l'image → analyse **automatique** des quatre angles et lecture
+du numéro d'asset ou du nom, puis export Excel en fin d'audit. Aucun recadrage ni rotation manuelle
+n'est nécessaire en usage normal.
 
 ## Confidentialité
 
@@ -52,7 +51,7 @@ Deux façons simples de faire cela, au choix :
 
 > **Scanner live et HTTPS** : les navigateurs autorisent la caméra sur `https://` ou sur
 > `http://localhost`, mais pas normalement sur une adresse IP en `http://`. L'adresse Wi-Fi
-> affichée par `server.js` permet donc le mode photo ; pour utiliser le scanner live depuis un
+> affichée par `server.js` permet d'ouvrir l'application ; pour utiliser le scanner live depuis un
 > téléphone, servez l'application via HTTPS sur le réseau local (avec un certificat accepté par
 > le téléphone). Sur le PC qui héberge l'application, `http://localhost:8080` peut utiliser la
 > caméra locale.
@@ -63,16 +62,15 @@ Deux façons simples de faire cela, au choix :
   à l'autre, mais vous pouvez les modifier avant chaque ajout : leurs valeurs sont conservées
   séparément pour chaque PC et apparaissent dans l'export Excel.
 2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Cadrez
-  l'étiquette puis touchez l'image pour prendre une photo. Les quatre angles sont analysés. Si le
+  l'étiquette puis touchez l'image pour déclencher l'analyse. Les quatre angles sont analysés. Si le
   numéro est trouvé, l'écran flashe en vert, le numéro s'affiche en grand et le scan se ferme. Si
   rien n'est trouvé, l'écran flashe en rouge et vous pouvez retoucher l'image pour réessayer.
   Utilisez **Arrêter** pour quitter ce mode. Le numéro détecté est pré-rempli — vérifiez-le toujours.
-  Pour une photo fixe, utilisez **Prendre une photo**, puis **Prendre la photo**. **Arrêter** permet
-  de quitter sans capturer.
+  Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image.
 3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché
   puis en touchant l'image. Les quatre angles sont analysés ; le scan se ferme si le nom est trouvé.
-  Vous pouvez aussi utiliser **Prendre une photo**. Le nom est pré-rempli automatiquement ;
-  vérifiez/corrigez si besoin.
+  Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image. Le nom est pré-rempli
+  automatiquement ; vérifiez/corrigez si besoin.
 4. Si un résultat est incorrect, ouvrez le bloc **"Résultat incorrect ? Réglage manuel"** : vous
    pouvez alors tourner l'image, dessiner vous-même un cadre autour du texte, puis "Relire".
 5. Complétez éventuellement le bureau/la salle et un commentaire.

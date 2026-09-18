@@ -9,14 +9,15 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.3.0</span>
+  <span class="version-badge">Version 1.4.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
 <main>
 
   <section class="card audit-context" id="audit-context">
-    <h2>Informations du PC</h2>
+    <details open>
+      <summary>Informations du PC</summary>
     <div class="context-grid">
       <div>
         <label class="field-label" for="fieldFloor">Étage</label>
@@ -31,6 +32,7 @@
         <input type="text" id="fieldAgency" placeholder="ex : Paris" autocomplete="off">
       </div>
     </div>
+    </details>
   </section>
 
   <section class="card" id="step-asset">
@@ -48,21 +50,14 @@
       <span>N° Asset détecté</span>
       <strong id="scanResultValueAsset"></strong>
     </div>
-    <button class="btn btn-primary full-width photo-start" id="startPhotoAsset" type="button">📷 Prendre une photo</button>
-    <div class="photo-capture" id="photoWrapAsset" hidden>
-      <video id="photoVideoAsset" class="live-video" playsinline muted></video>
-      <div class="scan-frame" aria-hidden="true"></div>
-      <div class="photo-status" id="photoStatusAsset" aria-live="polite"></div>
-      <div class="camera-controls">
-        <button class="btn btn-capture-photo" id="capturePhotoAsset" type="button">Prendre la photo</button>
-        <button class="btn btn-stop-live" id="stopPhotoAsset" type="button">Arrêter</button>
-      </div>
-    </div>
     <p class="auto-hint">Gardez le haut de l'étiquette vers le haut du téléphone ; son angle est suivi même à 90°.</p>
-    <div class="canvas-wrap" id="wrapAsset">
-      <canvas id="canvasAsset" class="preview"></canvas>
-      <div class="crop-box" id="cropBoxAsset" hidden></div>
-    </div>
+    <details class="photo-preview">
+      <summary>Photo capturée</summary>
+      <div class="canvas-wrap" id="wrapAsset">
+        <canvas id="canvasAsset" class="preview"></canvas>
+        <div class="crop-box" id="cropBoxAsset" hidden></div>
+      </div>
+    </details>
     <div class="progress" id="progressAsset"></div>
     <label class="field-label">N° Asset (vérifiez / corrigez)</label>
     <input type="text" id="fieldAsset" placeholder="ex : S165964" autocomplete="off">
@@ -98,21 +93,14 @@
       <span>Nom détecté</span>
       <strong id="scanResultValueName"></strong>
     </div>
-    <button class="btn btn-primary full-width photo-start" id="startPhotoName" type="button">📷 Prendre une photo</button>
-    <div class="photo-capture" id="photoWrapName" hidden>
-      <video id="photoVideoName" class="live-video" playsinline muted></video>
-      <div class="scan-frame" aria-hidden="true"></div>
-      <div class="photo-status" id="photoStatusName" aria-live="polite"></div>
-      <div class="camera-controls">
-        <button class="btn btn-capture-photo" id="capturePhotoName" type="button">Prendre la photo</button>
-        <button class="btn btn-stop-live" id="stopPhotoName" type="button">Arrêter</button>
-      </div>
-    </div>
     <p class="auto-hint">Gardez le haut du nom vers le haut du téléphone ; son angle est suivi même à 90°.</p>
-    <div class="canvas-wrap" id="wrapName">
-      <canvas id="canvasName" class="preview"></canvas>
-      <div class="crop-box" id="cropBoxName" hidden></div>
-    </div>
+    <details class="photo-preview">
+      <summary>Photo capturée</summary>
+      <div class="canvas-wrap" id="wrapName">
+        <canvas id="canvasName" class="preview"></canvas>
+        <div class="crop-box" id="cropBoxName" hidden></div>
+      </div>
+    </details>
     <div class="progress" id="progressName"></div>
     <label class="field-label">Nom de la personne connectée (vérifiez / corrigez)</label>
     <input type="text" id="fieldName" placeholder="ex : SIMON Xavier" autocomplete="off">
