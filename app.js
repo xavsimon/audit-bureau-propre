@@ -10,7 +10,7 @@ const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
-function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId) {
+function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId) {
   return {
     canvas: document.getElementById(canvasId),
     rotateBtn: document.getElementById(rotateBtnId),
@@ -24,6 +24,7 @@ function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, 
     liveVideo: document.getElementById(liveVideoId),
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
+    fallbackInput: document.getElementById(fallbackInputId),
     image: null,
     rotation: 0,
     invert: false,
@@ -38,11 +39,11 @@ function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, 
 
 const assetState = createCaptureState(
   'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset',
-  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset'
+  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset', 'fallbackInputAsset'
 );
 const nameState = createCaptureState(
   'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName',
-  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName'
+  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName', 'fallbackInputName'
 );
 
 function getImageDimensions(image) {
@@ -247,6 +248,17 @@ function wireCapture(state) {
 
   state.liveBtn.addEventListener('click', () => startLiveScan(state, getLiveConfig(state)));
   state.stopLiveBtn.addEventListener('click', () => stopLiveScan(state, true));
+  state.fallbackInput.addEventListener('change', async () => {
+    const file = state.fallbackInput.files?.[0];
+    state.fallbackInput.value = '';
+    if (!file) return;
+    try {
+      const image = await loadImageFile(file);
+      await analyzeCapturedImage(state, getLiveConfig(state), image, false);
+    } catch (e) {
+      document.getElementById(getLiveConfig(state).progressId).textContent = 'Photo impossible à lire.';
+    }
+  });
   state.liveWrap.addEventListener('click', (e) => {
     if (e.target.closest('button, .camera-controls')) return;
     captureLivePhoto(state, getLiveConfig(state));
@@ -550,6 +562,22 @@ function captureVideoFrame(video) {
   return frame;
 }
 
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Image illisible'));
+    };
+    image.src = url;
+  });
+}
+
 function flashScanSuccess() {
   document.body.classList.remove('scan-success-flash');
   document.body.classList.remove('scan-failure-flash');
@@ -586,23 +614,21 @@ function clearLiveResult(config) {
   document.getElementById(config.resultValueId).textContent = '';
 }
 
-async function captureLivePhoto(state, config) {
-  if (!state.liveActive || state.liveBusy) return;
+async function analyzeCapturedImage(state, config, image, liveCapture) {
+  if ((liveCapture && !state.liveActive) || state.liveBusy) return;
   state.liveBusy = true;
-  state.liveStatus.textContent = 'Photo prise, analyse des 4 angles...';
-  const frame = captureVideoFrame(state.liveVideo);
-  if (!frame) {
-    state.liveStatus.textContent = 'Mise au point de la caméra...';
-    state.liveBusy = false;
-    return;
-  }
-  flashScanCapture(state);
+  state.liveBtn.disabled = true;
+  const progressEl = document.getElementById(config.progressId);
+  const statusEl = liveCapture ? state.liveStatus : progressEl;
+  statusEl.textContent = 'Photo prise, analyse des 4 angles...';
+  if (liveCapture) flashScanCapture(state);
   state.rotation = 0;
   state.crop = null;
-  state.image = frame;
+  state.image = image;
+  renderPreview(state);
   try {
-    const text = await withOcrLock(() => autoRecognize(state, config.score, state.liveStatus));
-    if (!state.liveActive) return;
+    const text = await withOcrLock(() => autoRecognize(state, config.score, statusEl));
+    if (liveCapture && !state.liveActive) return;
     document.getElementById(config.rawId).textContent = text.trim();
     const value = config.extract(text);
     if (value) {
@@ -610,26 +636,50 @@ async function captureLivePhoto(state, config) {
       document.getElementById(config.resultValueId).textContent = value;
       document.getElementById(config.resultId).hidden = false;
       document.getElementById(config.progressId).textContent = `Détection confirmée : ${value}`;
-      await stopLiveScan(state, false);
+      if (liveCapture) await stopLiveScan(state, false);
       flashScanSuccess();
     } else {
-      state.liveStatus.textContent = 'Aucun texte reconnu. Touchez l\'image pour réessayer.';
-      flashLiveFailure(state);
+      statusEl.textContent = liveCapture
+        ? 'Aucun texte reconnu. Touchez l\'image pour réessayer.'
+        : 'Aucun texte reconnu. Relancez la capture pour réessayer.';
+      if (liveCapture) flashLiveFailure(state);
+      else flashScanFailure();
     }
   } catch (e) {
-    if (state.liveActive) {
-      state.liveStatus.textContent = 'Lecture impossible. Touchez l\'image pour réessayer.';
-      flashLiveFailure(state);
+    if (!liveCapture || state.liveActive) {
+      statusEl.textContent = liveCapture
+        ? 'Lecture impossible. Touchez l\'image pour réessayer.'
+        : 'Lecture impossible. Relancez la capture pour réessayer.';
+      if (liveCapture) flashLiveFailure(state);
+      else flashScanFailure();
     }
   } finally {
     state.liveBusy = false;
+    updateCaptureButtons(state);
   }
+}
+
+async function captureLivePhoto(state, config) {
+  if (!state.liveActive || state.liveBusy) return;
+  const frame = captureVideoFrame(state.liveVideo);
+  if (!frame) {
+    state.liveStatus.textContent = 'Mise au point de la caméra...';
+    return;
+  }
+  await analyzeCapturedImage(state, config, frame, true);
+}
+
+function openFallbackCapture(state, config) {
+  clearLiveResult(config);
+  document.getElementById(config.progressId).textContent = 'Ouverture de la caméra...';
+  state.fallbackInput.value = '';
+  state.fallbackInput.click();
 }
 
 async function startLiveScan(state, config) {
   if (state.liveActive) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert('La caméra nécessite une page HTTPS ou localhost dans un navigateur compatible.');
+    openFallbackCapture(state, config);
     return;
   }
 
@@ -773,6 +823,10 @@ let entries = loadEntries();
 let editingIndex = null;
 let editingContextBackup = null;
 
+if (entries.length) {
+  document.querySelector('#audit-context details').open = false;
+}
+
 function getAuditContextFromFields() {
   return {
     etage: document.getElementById('fieldFloor').value.trim(),
@@ -884,7 +938,8 @@ document.getElementById('addEntry').addEventListener('click', () => {
     return;
   }
 
-  if (editingIndex === null) {
+  const addingEntry = editingIndex === null;
+  if (addingEntry) {
     const now = new Date();
     entries.push({
       date: now.toLocaleDateString('fr-FR'),
@@ -911,6 +966,7 @@ document.getElementById('addEntry').addEventListener('click', () => {
   }
   saveEntries(entries);
   renderTable();
+  if (addingEntry) document.querySelector('#audit-context details').open = false;
 
   // Réinitialise les champs de saisie pour la prochaine machine (garde le bureau).
   editingContextBackup = null;

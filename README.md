@@ -51,10 +51,10 @@ Deux façons simples de faire cela, au choix :
 
 > **Scanner live et HTTPS** : les navigateurs autorisent la caméra sur `https://` ou sur
 > `http://localhost`, mais pas normalement sur une adresse IP en `http://`. L'adresse Wi-Fi
-> affichée par `server.js` permet d'ouvrir l'application ; pour utiliser le scanner live depuis un
-> téléphone, servez l'application via HTTPS sur le réseau local (avec un certificat accepté par
-> le téléphone). Sur le PC qui héberge l'application, `http://localhost:8080` peut utiliser la
-> caméra locale.
+> affichée par `server.js` permet d'ouvrir l'application. Sur une adresse IP en HTTP, le même bouton
+> ouvre la caméra native du téléphone comme solution de repli ; le scanner live reste disponible via
+> HTTPS ou `http://localhost`. Sur le PC qui héberge l'application, `http://localhost:8080` peut
+> utiliser la caméra locale.
 
 ## Utilisation pendant l'audit
 
