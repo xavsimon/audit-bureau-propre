@@ -10,7 +10,7 @@ const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
-function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId, ocrLoadingId) {
+function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId, ocrLoadingId, scanProgressId) {
   return {
     canvas: document.getElementById(canvasId),
     wrap: document.getElementById(wrapId),
@@ -22,6 +22,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     stopLiveBtn: document.getElementById(stopLiveBtnId),
     fallbackInput: document.getElementById(fallbackInputId),
     ocrLoading: document.getElementById(ocrLoadingId),
+    scanProgress: document.getElementById(scanProgressId),
     image: null,
     rotation: 0,
     invert: false,
@@ -38,11 +39,11 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
 
 const assetState = createCaptureState(
   'canvasAsset', 'wrapAsset', 'cropBoxAsset', 'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset',
-  'liveStatusAsset', 'stopLiveAsset', 'fallbackInputAsset', 'ocrLoadingAsset'
+  'liveStatusAsset', 'stopLiveAsset', 'fallbackInputAsset', 'ocrLoadingAsset', 'scanProgressAsset'
 );
 const nameState = createCaptureState(
   'canvasName', 'wrapName', 'cropBoxName', 'startLiveName', 'liveWrapName', 'liveVideoName',
-  'liveStatusName', 'stopLiveName', 'fallbackInputName', 'ocrLoadingName'
+  'liveStatusName', 'stopLiveName', 'fallbackInputName', 'ocrLoadingName', 'scanProgressName'
 );
 
 function getImageDimensions(image) {
@@ -310,22 +311,29 @@ function scoreNameLines(lines) {
   return { line: bestLine, score: bestLine ? bestScore : -Infinity };
 }
 
-// Essaie les 4 orientations, repère automatiquement la meilleure zone de texte
-// (mode "texte épars" = robuste face aux photos avec beaucoup de texture parasite),
-// puis relit cette zone en haute qualité (recadrée + agrandie) pour un résultat propre.
-async function autoRecognize(state, scoreFn, progressEl) {
+// Repère la meilleure zone de texte puis la relit en haute qualité. L'étiquette
+// teste les quatre orientations ; le nom est traité directement à 0 degré.
+async function autoRecognize(state, scoreFn, detectOrientation, onProgress, isCurrent) {
   const worker = await getWorker();
   let best = null;
+  const rotations = detectOrientation ? ROTATIONS : [0];
 
   await worker.setParameters({ tessedit_pageseg_mode: '11' });
-  for (let i = 0; i < ROTATIONS.length; i += 1) {
-    const rotation = ROTATIONS[i];
-    progressEl.textContent = `Détection de l'orientation... (${i + 1}/${ROTATIONS.length})`;
+  onProgress(10, detectOrientation ? 'Préparation des 4 orientations...' : 'Recherche du nom...');
+  for (let i = 0; i < rotations.length; i += 1) {
+    if (!isCurrent()) return '';
+    const rotation = rotations[i];
+    const percent = 15 + Math.round(((i + 1) / rotations.length) * 60);
+    const message = detectOrientation
+      ? `Reconnaissance de l'orientation... (${i + 1}/${rotations.length})`
+      : 'Reconnaissance du nom...';
+    onProgress(percent, message);
     state.rotation = rotation;
     state.crop = null;
     const canvas = buildOcrCanvas(state);
     // eslint-disable-next-line no-await-in-loop
     const { data } = await worker.recognize(canvas, {}, { blocks: true });
+    if (!isCurrent()) return '';
     const { line, score } = scoreFn(flattenLines(data));
     if (line && score > (best ? best.score : -Infinity)) {
       best = {
@@ -345,7 +353,7 @@ async function autoRecognize(state, scoreFn, progressEl) {
     state.rotation = 0;
     state.crop = null;
     renderPreview(state);
-    progressEl.textContent = '';
+    onProgress(100, 'Aucun texte détecté.');
     return '';
   }
 
@@ -366,11 +374,12 @@ async function autoRecognize(state, scoreFn, progressEl) {
   };
   renderPreview(state);
 
-  progressEl.textContent = 'Lecture précise...';
+  onProgress(90, 'Lecture précise...');
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
   const refinedCanvas = buildOcrCanvas(state);
   const { data } = await worker.recognize(refinedCanvas, {}, { text: true });
-  progressEl.textContent = '';
+  if (!isCurrent()) return '';
+  onProgress(100, 'Reconnaissance terminée.');
   return data.text || '';
 }
 
@@ -425,8 +434,10 @@ function getLiveConfig(state) {
       progressId: 'progressAsset',
       resultId: 'scanResultAsset',
       resultValueId: 'scanResultValueAsset',
+      scanProgressId: 'scanProgressAsset',
       score: scoreAssetLines,
       extract: extractAssetNumber,
+      detectOrientation: true,
     };
   }
   return {
@@ -434,7 +445,9 @@ function getLiveConfig(state) {
     progressId: 'progressName',
     resultId: 'scanResultName',
     resultValueId: 'scanResultValueName',
+    scanProgressId: 'scanProgressName',
     score: scoreNameLines,
+    detectOrientation: false,
     extract: (text) => {
       const value = extractName(text);
       return scoreNameLine(value) >= 2 ? value : '';
@@ -477,7 +490,27 @@ function updateCaptureButtons(state) {
   state.liveBtn.disabled = state.liveActive;
 }
 
+function updateScanProgress(state, config, liveCapture, percent, message) {
+  const progressEl = document.getElementById(config.progressId);
+  progressEl.textContent = message;
+  const scanProgress = state.scanProgress;
+  const bar = scanProgress.querySelector('progress');
+  const text = scanProgress.querySelector('.scan-progress-text');
+  const percentLabel = scanProgress.querySelector('.scan-progress-percent');
+  const boundedPercent = Math.min(100, Math.max(0, percent));
+  bar.value = boundedPercent;
+  text.textContent = message;
+  percentLabel.textContent = `${boundedPercent} %`;
+  scanProgress.hidden = !message;
+  if (liveCapture) state.liveStatus.textContent = message;
+}
+
+function resetScanProgress(state, config) {
+  updateScanProgress(state, config, false, 0, '');
+}
+
 function stopLiveScan(state, restore = true) {
+  state.analysisGeneration += 1;
   state.liveActive = false;
   state.liveBusy = false;
   if (state.liveStream) {
@@ -493,6 +526,7 @@ function stopLiveScan(state, restore = true) {
   setCaptureActive(false);
   updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
+  resetScanProgress(state, getLiveConfig(state));
   if (restore) {
     restoreSavedState(state, state.liveSaved);
     state.liveSaved = null;
@@ -563,10 +597,19 @@ function clearLiveResult(state, config) {
   state.analysisGeneration += 1;
   document.getElementById(config.resultId).hidden = true;
   document.getElementById(config.resultValueId).textContent = '';
+  resetScanProgress(state, config);
+}
+
+function resetScanVerification(state, config) {
+  clearLiveResult(state, config);
+  document.getElementById(config.fieldId).value = '';
+  state.rotation = 0;
+  state.crop = null;
 }
 
 async function analyzeCapturedImage(state, config, image, liveCapture) {
-  if ((liveCapture && !state.liveActive) || state.liveBusy) return;
+  if ((liveCapture && !state.liveActive) || (state.liveBusy && state !== assetState)) return;
+  if (state.liveBusy && state === assetState) resetScanVerification(state, config);
   const analysisGeneration = ++state.analysisGeneration;
   state.liveBusy = true;
   state.liveBtn.disabled = true;
@@ -578,13 +621,24 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
       return;
     }
     if (analysisGeneration !== state.analysisGeneration) return;
-    statusEl.textContent = 'Photo prise, analyse des 4 angles...';
+    const reportProgress = (percent, message) => {
+      if (analysisGeneration === state.analysisGeneration) {
+        updateScanProgress(state, config, liveCapture, percent, message);
+      }
+    };
+    reportProgress(5, liveCapture ? 'Photo prise, démarrage de la reconnaissance...' : 'Démarrage de la reconnaissance...');
     if (liveCapture) flashScanCapture(state);
     state.rotation = 0;
     state.crop = null;
     state.image = image;
     renderPreview(state);
-    const text = await withOcrLock(() => autoRecognize(state, config.score, statusEl));
+    const text = await withOcrLock(() => autoRecognize(
+      state,
+      config.score,
+      config.detectOrientation,
+      reportProgress,
+      () => analysisGeneration === state.analysisGeneration
+    ));
     if (analysisGeneration !== state.analysisGeneration) return;
     if (liveCapture && !state.liveActive) return;
     const value = config.extract(text);
@@ -595,28 +649,33 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
       if (liveCapture) await stopLiveScan(state, false);
       flashScanSuccess();
     } else {
-      statusEl.textContent = liveCapture
+      const message = liveCapture
         ? 'Aucun texte reconnu. Touchez l\'image pour réessayer.'
         : 'Aucun texte reconnu. Relancez la capture pour réessayer.';
+      updateScanProgress(state, config, liveCapture, 100, message);
       if (liveCapture) flashLiveFailure(state);
       else flashScanFailure();
     }
   } catch (e) {
-    if (!liveCapture || state.liveActive) {
-      statusEl.textContent = liveCapture
+    if (analysisGeneration === state.analysisGeneration && (!liveCapture || state.liveActive)) {
+      const message = liveCapture
         ? 'Lecture impossible. Touchez l\'image pour réessayer.'
         : 'Lecture impossible. Relancez la capture pour réessayer.';
+      updateScanProgress(state, config, liveCapture, 100, message);
       if (liveCapture) flashLiveFailure(state);
       else flashScanFailure();
     }
   } finally {
-    state.liveBusy = false;
-    updateCaptureButtons(state);
+    if (analysisGeneration === state.analysisGeneration) {
+      state.liveBusy = false;
+      updateCaptureButtons(state);
+    }
   }
 }
 
 async function captureLivePhoto(state, config) {
-  if (!state.liveActive || state.liveBusy) return;
+  if (!state.liveActive || (state.liveBusy && state !== assetState)) return;
+  if (state.liveBusy && state === assetState) resetScanVerification(state, config);
   const frame = captureVideoFrame(state.liveVideo);
   if (!frame) {
     state.liveStatus.textContent = 'Mise au point de la caméra...';

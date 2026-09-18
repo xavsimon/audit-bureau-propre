@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.11.0</span>
+  <span class="version-badge">Version 1.12.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -48,6 +48,13 @@
       <video id="liveVideoAsset" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
       <div class="scan-frame" aria-hidden="true"></div>
       <div class="live-status" id="liveStatusAsset" aria-live="polite"></div>
+      <div class="scan-progress" id="scanProgressAsset" hidden aria-live="polite">
+        <div class="scan-progress-label">
+          <span class="scan-progress-text">Analyse en cours</span>
+          <span class="scan-progress-percent">0 %</span>
+        </div>
+        <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
+      </div>
       <div class="camera-controls">
         <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
       </div>
@@ -81,6 +88,13 @@
       <video id="liveVideoName" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
       <div class="scan-frame" aria-hidden="true"></div>
       <div class="live-status" id="liveStatusName" aria-live="polite"></div>
+      <div class="scan-progress" id="scanProgressName" hidden aria-live="polite">
+        <div class="scan-progress-label">
+          <span class="scan-progress-text">Analyse en cours</span>
+          <span class="scan-progress-percent">0 %</span>
+        </div>
+        <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
+      </div>
       <div class="camera-controls">
         <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>
       </div>
