@@ -32,6 +32,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveBusy: false,
     liveSaved: null,
     ocrReady: false,
+    analysisGeneration: 0,
   };
 }
 
@@ -558,13 +559,15 @@ function flashLiveFailure(state) {
   flashScanFailure();
 }
 
-function clearLiveResult(config) {
+function clearLiveResult(state, config) {
+  state.analysisGeneration += 1;
   document.getElementById(config.resultId).hidden = true;
   document.getElementById(config.resultValueId).textContent = '';
 }
 
 async function analyzeCapturedImage(state, config, image, liveCapture) {
   if ((liveCapture && !state.liveActive) || state.liveBusy) return;
+  const analysisGeneration = ++state.analysisGeneration;
   state.liveBusy = true;
   state.liveBtn.disabled = true;
   const progressEl = document.getElementById(config.progressId);
@@ -574,6 +577,7 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
       statusEl.textContent = 'OCR indisponible. Réessayez.';
       return;
     }
+    if (analysisGeneration !== state.analysisGeneration) return;
     statusEl.textContent = 'Photo prise, analyse des 4 angles...';
     if (liveCapture) flashScanCapture(state);
     state.rotation = 0;
@@ -581,6 +585,7 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     state.image = image;
     renderPreview(state);
     const text = await withOcrLock(() => autoRecognize(state, config.score, statusEl));
+    if (analysisGeneration !== state.analysisGeneration) return;
     if (liveCapture && !state.liveActive) return;
     const value = config.extract(text);
     if (value) {
@@ -621,7 +626,7 @@ async function captureLivePhoto(state, config) {
 }
 
 function openFallbackCapture(state, config) {
-  clearLiveResult(config);
+  clearLiveResult(state, config);
   document.getElementById(config.progressId).textContent = 'Ouverture de la caméra...';
   state.fallbackInput.value = '';
   state.fallbackInput.click();
@@ -640,7 +645,7 @@ async function startLiveScan(state, config) {
     invert: state.invert,
     crop: state.crop,
   };
-  clearLiveResult(config);
+  clearLiveResult(state, config);
   state.image = null;
   state.crop = null;
   state.rotation = 0;
@@ -828,8 +833,8 @@ function resetEntryForm() {
   editingContextBackup = null;
   document.getElementById('fieldAsset').value = '';
   document.getElementById('fieldName').value = '';
-  clearLiveResult(getLiveConfig(assetState));
-  clearLiveResult(getLiveConfig(nameState));
+  clearLiveResult(assetState, getLiveConfig(assetState));
+  clearLiveResult(nameState, getLiveConfig(nameState));
   document.getElementById('fieldComment').value = '';
   document.getElementById('addEntry').textContent = '➕ Ajouter à la liste';
   document.getElementById('cancelEdit').hidden = true;
