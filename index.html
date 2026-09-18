@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.5.0</span>
+  <span class="version-badge">Version 1.6.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -39,6 +39,11 @@
     <h2>1. Étiquette d'asset (PC non attaché)</h2>
     <button class="btn btn-live full-width" id="startLiveAsset" type="button">📹 Démarrer le scanner live</button>
     <input id="fallbackInputAsset" type="file" accept="image/*" capture="environment" hidden>
+    <div class="ocr-loading" id="ocrLoadingAsset" hidden aria-live="polite">
+      <span class="ocr-spinner" aria-hidden="true"></span>
+      <strong>Initialisation de l'OCR</strong>
+      <span>Veuillez patienter avant de toucher l'écran.</span>
+    </div>
     <div class="live-scanner" id="liveWrapAsset" hidden>
       <video id="liveVideoAsset" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
       <div class="scan-frame" aria-hidden="true"></div>
@@ -51,7 +56,6 @@
       <span>N° Asset détecté</span>
       <strong id="scanResultValueAsset"></strong>
     </div>
-    <p class="auto-hint">Gardez le haut de l'étiquette vers le haut du téléphone ; son angle est suivi même à 90°.</p>
     <details class="photo-preview">
       <summary>Photo capturée</summary>
       <div class="canvas-wrap" id="wrapAsset">
@@ -66,23 +70,17 @@
       <summary>Texte brut détecté</summary>
       <pre id="rawAsset"></pre>
     </details>
-    <details class="manual-tools">
-      <summary>Résultat incorrect ? Réglage manuel</summary>
-      <div class="capture-row">
-        <button class="btn" id="rotateAsset" disabled>⟳ Rotation</button>
-        <button class="btn" id="invertAsset" disabled>◐ Inverser</button>
-        <button class="btn" id="resetCropAsset" disabled>▭ Cadrage complet</button>
-      </div>
-      <p class="crop-hint">Tournez si besoin, puis dessinez avec le doigt un cadre serré autour du texte
-        "Asset: ...", puis relisez.</p>
-      <button class="btn btn-secondary" id="ocrAsset" disabled>🔄 Relire (OCR)</button>
-    </details>
   </section>
 
   <section class="card" id="step-name">
     <h2>2. Écran de verrouillage (nom de l'utilisateur)</h2>
     <button class="btn btn-live full-width" id="startLiveName" type="button">📹 Démarrer le scanner live</button>
     <input id="fallbackInputName" type="file" accept="image/*" capture="environment" hidden>
+    <div class="ocr-loading" id="ocrLoadingName" hidden aria-live="polite">
+      <span class="ocr-spinner" aria-hidden="true"></span>
+      <strong>Initialisation de l'OCR</strong>
+      <span>Veuillez patienter avant de toucher l'écran.</span>
+    </div>
     <div class="live-scanner" id="liveWrapName" hidden>
       <video id="liveVideoName" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
       <div class="scan-frame" aria-hidden="true"></div>
@@ -95,7 +93,6 @@
       <span>Nom détecté</span>
       <strong id="scanResultValueName"></strong>
     </div>
-    <p class="auto-hint">Gardez le haut du nom vers le haut du téléphone ; son angle est suivi même à 90°.</p>
     <details class="photo-preview">
       <summary>Photo capturée</summary>
       <div class="canvas-wrap" id="wrapName">
@@ -109,16 +106,6 @@
     <details class="raw-text">
       <summary>Texte brut détecté</summary>
       <pre id="rawName"></pre>
-    </details>
-    <details class="manual-tools">
-      <summary>Résultat incorrect ? Réglage manuel</summary>
-      <div class="capture-row">
-        <button class="btn" id="rotateName" disabled>⟳ Rotation</button>
-        <button class="btn" id="invertName" disabled>◐ Inverser</button>
-        <button class="btn" id="resetCropName" disabled>▭ Cadrage complet</button>
-      </div>
-      <p class="crop-hint">Dessinez avec le doigt un cadre serré juste autour du nom affiché, puis relisez.</p>
-      <button class="btn btn-secondary" id="ocrName" disabled>🔄 Relire (OCR)</button>
     </details>
   </section>
 

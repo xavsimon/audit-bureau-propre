@@ -61,27 +61,26 @@ Deux façons simples de faire cela, au choix :
 1. Renseignez **Étage**, **BU** et **Agence** en haut de l'écran. Elles restent préremplies d'un PC
   à l'autre, mais vous pouvez les modifier avant chaque ajout : leurs valeurs sont conservées
   séparément pour chaque PC et apparaissent dans l'export Excel.
-2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Cadrez
-  l'étiquette puis touchez l'image pour déclencher l'analyse. Les quatre angles sont analysés. Si le
-  numéro est trouvé, l'écran flashe en vert, le numéro s'affiche en grand et le scan se ferme. Si
-  rien n'est trouvé, l'écran flashe en rouge et vous pouvez retoucher l'image pour réessayer.
-  Utilisez **Arrêter** pour quitter ce mode. Le numéro détecté est pré-rempli — vérifiez-le toujours.
+2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Attendez
+  la fin de l'initialisation OCR, puis cadrez l'étiquette et touchez l'image pour déclencher l'analyse.
+  Les quatre angles sont analysés. Si le numéro est trouvé, l'écran flashe en vert, le numéro
+  s'affiche en grand et le scan se ferme. Si rien n'est trouvé, l'écran flashe en rouge et vous
+  pouvez retoucher l'image pour réessayer. Utilisez **Arrêter** pour quitter ce mode.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image.
-3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en cadrant le nom affiché
-  puis en touchant l'image. Les quatre angles sont analysés ; le scan se ferme si le nom est trouvé.
+3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en attendant
+  l'initialisation OCR, puis en cadrant le nom affiché et en touchant l'image. Les quatre angles sont
+  analysés ; le scan se ferme si le nom est trouvé.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image. Le nom est pré-rempli
   automatiquement ; vérifiez/corrigez si besoin.
-4. Si un résultat est incorrect, ouvrez le bloc **"Résultat incorrect ? Réglage manuel"** : vous
-   pouvez alors tourner l'image, dessiner vous-même un cadre autour du texte, puis "Relire".
-5. Complétez éventuellement le bureau/la salle et un commentaire.
-6. Cliquez sur **"Ajouter à la liste"**.
-7. Répétez pour chaque PC non attaché trouvé.
-8. Pour corriger une ligne, cliquez sur **"Modifier"** dans la colonne Actions, modifiez les champs,
+4. Complétez éventuellement le numéro d'asset, le nom, le bureau/la salle et un commentaire.
+5. Cliquez sur **"Ajouter à la liste"**.
+6. Répétez pour chaque PC non attaché trouvé.
+7. Pour corriger une ligne, cliquez sur **"Modifier"** dans la colonne Actions, modifiez les champs,
    puis cliquez sur **"Enregistrer la modification"**.
-9. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
+8. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
   feuille de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé
   et peut être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
-10. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
+9. Le bouton "Vider la liste" efface définitivement les entrées stockées sur l'appareil (à utiliser
    une fois l'export récupéré).
 
 ## Structure du dossier

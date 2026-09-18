@@ -166,6 +166,36 @@ main {
 
 .live-scanner[hidden] { display: none; }
 
+.ocr-loading[hidden] { display: none; }
+.ocr-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.94);
+  color: #fff;
+  text-align: center;
+}
+.ocr-loading strong { font-size: 1.1rem; }
+.ocr-loading span:last-child { font-size: 0.9rem; opacity: 0.9; }
+.ocr-spinner {
+  width: 42px;
+  height: 42px;
+  border: 4px solid rgba(255, 255, 255, 0.28);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ocr-spin 800ms linear infinite;
+}
+
+@keyframes ocr-spin {
+  to { transform: rotate(360deg); }
+}
+
 .live-scanner.capture-failure-flash::after {
   content: '';
   position: absolute;
@@ -256,16 +286,6 @@ main {
 
 .camera-controls .btn:only-child { flex: 0 1 240px; margin: 0 auto; }
 
-.manual-tools {
-  margin-top: 10px;
-  border-top: 1px dashed var(--border);
-  padding-top: 8px;
-}
-.manual-tools summary {
-  font-size: 0.8rem;
-  color: #777;
-  cursor: pointer;
-}
 .audit-context details summary, .photo-preview summary {
   color: var(--primary-dark);
   cursor: pointer;
@@ -274,7 +294,6 @@ main {
 .audit-context details summary { font-size: 1.05rem; }
 .photo-preview { margin: 8px 0; }
 .photo-preview summary { font-size: 0.8rem; color: #777; }
-.manual-tools .capture-row { margin-top: 8px; }
 
 .preview {
   width: 100%;
@@ -292,12 +311,6 @@ main {
   touch-action: none;
 }
 .canvas-wrap .preview { margin-bottom: 0; }
-
-.crop-hint {
-  font-size: 0.78rem;
-  color: #777;
-  margin: 0 0 8px;
-}
 
 .crop-box {
   position: absolute;

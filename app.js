@@ -10,13 +10,9 @@ const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
-function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, ocrBtnId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId) {
+function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId, ocrLoadingId) {
   return {
     canvas: document.getElementById(canvasId),
-    rotateBtn: document.getElementById(rotateBtnId),
-    invertBtn: document.getElementById(invertBtnId),
-    resetCropBtn: document.getElementById(resetCropBtnId),
-    ocrBtn: document.getElementById(ocrBtnId),
     wrap: document.getElementById(wrapId),
     cropBox: document.getElementById(cropBoxId),
     liveBtn: document.getElementById(liveBtnId),
@@ -25,6 +21,7 @@ function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, 
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
     fallbackInput: document.getElementById(fallbackInputId),
+    ocrLoading: document.getElementById(ocrLoadingId),
     image: null,
     rotation: 0,
     invert: false,
@@ -34,16 +31,17 @@ function createCaptureState(canvasId, rotateBtnId, invertBtnId, resetCropBtnId, 
     liveActive: false,
     liveBusy: false,
     liveSaved: null,
+    ocrReady: false,
   };
 }
 
 const assetState = createCaptureState(
-  'canvasAsset', 'rotateAsset', 'invertAsset', 'resetCropAsset', 'ocrAsset', 'wrapAsset', 'cropBoxAsset',
-  'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset', 'liveStatusAsset', 'stopLiveAsset', 'fallbackInputAsset'
+  'canvasAsset', 'wrapAsset', 'cropBoxAsset', 'startLiveAsset', 'liveWrapAsset', 'liveVideoAsset',
+  'liveStatusAsset', 'stopLiveAsset', 'fallbackInputAsset', 'ocrLoadingAsset'
 );
 const nameState = createCaptureState(
-  'canvasName', 'rotateName', 'invertName', 'resetCropName', 'ocrName', 'wrapName', 'cropBoxName',
-  'startLiveName', 'liveWrapName', 'liveVideoName', 'liveStatusName', 'stopLiveName', 'fallbackInputName'
+  'canvasName', 'wrapName', 'cropBoxName', 'startLiveName', 'liveWrapName', 'liveVideoName',
+  'liveStatusName', 'stopLiveName', 'fallbackInputName', 'ocrLoadingName'
 );
 
 function getImageDimensions(image) {
@@ -112,49 +110,6 @@ function imageDisplayRect(canvas) {
     offX = (rect.width - dispW) / 2;
   }
   return { rect, offX, offY, dispW, dispH };
-}
-
-// Sélection tactile/souris d'une zone de recadrage sur le canvas affiché.
-function wireCropSelection(state) {
-  const { wrap, canvas } = state;
-  let dragStart = null;
-
-  const posFromEvent = (e) => {
-    const { rect, offX, offY, dispW, dispH } = imageDisplayRect(canvas);
-    const x = (e.clientX - rect.left - offX) / dispW;
-    const y = (e.clientY - rect.top - offY) / dispH;
-    return { x: Math.min(Math.max(x, 0), 1), y: Math.min(Math.max(y, 0), 1) };
-  };
-
-  wrap.addEventListener('pointerdown', (e) => {
-    if (!state.image) return;
-    wrap.setPointerCapture(e.pointerId);
-    dragStart = posFromEvent(e);
-    state.crop = { x: dragStart.x, y: dragStart.y, w: 0, h: 0 };
-    updateCropBoxUI(state);
-  });
-
-  wrap.addEventListener('pointermove', (e) => {
-    if (!dragStart) return;
-    const p = posFromEvent(e);
-    const x = Math.min(dragStart.x, p.x);
-    const y = Math.min(dragStart.y, p.y);
-    const w = Math.abs(p.x - dragStart.x);
-    const h = Math.abs(p.y - dragStart.y);
-    state.crop = { x, y, w, h };
-    updateCropBoxUI(state);
-  });
-
-  const endDrag = () => {
-    if (!dragStart) return;
-    dragStart = null;
-    if (!state.crop || state.crop.w < 0.03 || state.crop.h < 0.03) {
-      state.crop = null;
-      updateCropBoxUI(state);
-    }
-  };
-  wrap.addEventListener('pointerup', endDrag);
-  wrap.addEventListener('pointercancel', endDrag);
 }
 
 // Construit un canvas hors-écran recadré + prétraité (niveaux de gris,
@@ -231,21 +186,6 @@ function buildOcrCanvas(state) {
 }
 
 function wireCapture(state) {
-  state.rotateBtn.addEventListener('click', () => {
-    state.rotation = (state.rotation + 90) % 360;
-    state.crop = null;
-    renderPreview(state);
-  });
-
-  state.invertBtn.addEventListener('click', () => {
-    state.invert = !state.invert;
-  });
-
-  state.resetCropBtn.addEventListener('click', () => {
-    state.crop = null;
-    updateCropBoxUI(state);
-  });
-
   state.liveBtn.addEventListener('click', () => startLiveScan(state, getLiveConfig(state)));
   state.stopLiveBtn.addEventListener('click', () => stopLiveScan(state, true));
   state.fallbackInput.addEventListener('change', async () => {
@@ -263,7 +203,6 @@ function wireCapture(state) {
     if (e.target.closest('button, .camera-controls')) return;
     captureLivePhoto(state, getLiveConfig(state));
   });
-  wireCropSelection(state);
 }
 
 wireCapture(assetState);
@@ -289,6 +228,25 @@ function getWorker() {
   return workerPromise;
 }
 
+function setOcrLoading(state, active) {
+  state.ocrLoading.hidden = !active;
+}
+
+async function prepareOcr(state) {
+  if (state.ocrReady) return true;
+  setOcrLoading(state, true);
+  try {
+    await getWorker();
+    state.ocrReady = true;
+    return true;
+  } catch (e) {
+    state.ocrReady = false;
+    return false;
+  } finally {
+    if (state.ocrReady) setOcrLoading(state, false);
+  }
+}
+
 // Un seul worker Tesseract est partagé entre l'étiquette et l'écran : sans
 // verrou, deux analyses lancées en même temps (ex. deux photos prises coup sur
 // coup) se marchent dessus (paramètres PSM écrasés l'un par l'autre). Cette
@@ -298,16 +256,6 @@ function withOcrLock(fn) {
   const result = ocrQueue.then(fn, fn);
   ocrQueue = result.then(() => undefined, () => undefined);
   return result;
-}
-
-async function runOcr(state, progressEl) {
-  const worker = await getWorker();
-  await worker.setParameters({ tessedit_pageseg_mode: '6' });
-  const ocrCanvas = buildOcrCanvas(state);
-  progressEl.textContent = 'Analyse en cours...';
-  const { data } = await worker.recognize(ocrCanvas, {}, { text: true });
-  progressEl.textContent = '';
-  return data.text || '';
 }
 
 // ---------- Détection automatique (orientation + zone de texte) ----------
@@ -535,6 +483,7 @@ function stopLiveScan(state, restore = true) {
   state.liveWrap.hidden = true;
   state.canvas.hidden = false;
   const exitPromise = exitCaptureFullscreen(state.liveWrap);
+  setOcrLoading(state, false);
   setCaptureActive(false);
   updateCaptureButtons(state);
   state.stopLiveBtn.disabled = false;
@@ -542,11 +491,6 @@ function stopLiveScan(state, restore = true) {
     restoreSavedState(state, state.liveSaved);
     state.liveSaved = null;
   }
-  const hasImage = Boolean(state.image);
-  state.rotateBtn.disabled = !hasImage;
-  state.invertBtn.disabled = !hasImage;
-  state.resetCropBtn.disabled = !hasImage;
-  state.ocrBtn.disabled = !hasImage;
   if (!restore) state.liveSaved = null;
   state.liveStatus.textContent = '';
   return exitPromise;
@@ -620,13 +564,17 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
   state.liveBtn.disabled = true;
   const progressEl = document.getElementById(config.progressId);
   const statusEl = liveCapture ? state.liveStatus : progressEl;
-  statusEl.textContent = 'Photo prise, analyse des 4 angles...';
-  if (liveCapture) flashScanCapture(state);
-  state.rotation = 0;
-  state.crop = null;
-  state.image = image;
-  renderPreview(state);
   try {
+    if (!await prepareOcr(state)) {
+      statusEl.textContent = 'OCR indisponible. Réessayez.';
+      return;
+    }
+    statusEl.textContent = 'Photo prise, analyse des 4 angles...';
+    if (liveCapture) flashScanCapture(state);
+    state.rotation = 0;
+    state.crop = null;
+    state.image = image;
+    renderPreview(state);
     const text = await withOcrLock(() => autoRecognize(state, config.score, statusEl));
     if (liveCapture && !state.liveActive) return;
     document.getElementById(config.rawId).textContent = text.trim();
@@ -635,7 +583,6 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
       document.getElementById(config.fieldId).value = value;
       document.getElementById(config.resultValueId).textContent = value;
       document.getElementById(config.resultId).hidden = false;
-      document.getElementById(config.progressId).textContent = `Détection confirmée : ${value}`;
       if (liveCapture) await stopLiveScan(state, false);
       flashScanSuccess();
     } else {
@@ -701,6 +648,7 @@ async function startLiveScan(state, config) {
   state.liveWrap.hidden = false;
   setCaptureActive(true);
   state.liveStatus.textContent = 'Connexion à la caméra...';
+  const ocrReadyPromise = prepareOcr(state);
 
   try {
     await enterCaptureFullscreen(state.liveWrap);
@@ -715,6 +663,11 @@ async function startLiveScan(state, config) {
     state.liveStream = stream;
     state.liveVideo.srcObject = stream;
     await state.liveVideo.play();
+    if (!await ocrReadyPromise) {
+      await stopLiveScan(state, true);
+      state.liveStatus.textContent = 'OCR indisponible. Réessayez.';
+      return;
+    }
     state.liveStatus.textContent = 'Cadrez le texte puis touchez l\'image pour analyser.';
   } catch (e) {
     stopLiveScan(state, true);
@@ -724,51 +677,6 @@ async function startLiveScan(state, config) {
     alert(message);
   }
 }
-
-async function runAssetOcr() {
-  const btn = document.getElementById('ocrAsset');
-  const progressEl = document.getElementById('progressAsset');
-  btn.disabled = true;
-  if (assetState.crop === null) progressEl.textContent = 'En attente...';
-  try {
-    // Si l'utilisateur a lui-même dessiné un cadre, on respecte son choix ;
-    // sinon on détecte automatiquement l'orientation et la zone du texte.
-    const text = await withOcrLock(() => (assetState.crop
-      ? runOcr(assetState, progressEl)
-      : autoRecognize(assetState, scoreAssetLines, progressEl)));
-    document.getElementById('rawAsset').textContent = text.trim();
-    const guess = extractAssetNumber(text);
-    if (guess) document.getElementById('fieldAsset').value = guess;
-  } catch (e) {
-    progressEl.textContent = '';
-    alert("Erreur pendant l'OCR : " + e.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function runNameOcr() {
-  const btn = document.getElementById('ocrName');
-  const progressEl = document.getElementById('progressName');
-  btn.disabled = true;
-  if (nameState.crop === null) progressEl.textContent = 'En attente...';
-  try {
-    const text = await withOcrLock(() => (nameState.crop
-      ? runOcr(nameState, progressEl)
-      : autoRecognize(nameState, scoreNameLines, progressEl)));
-    document.getElementById('rawName').textContent = text.trim();
-    const guess = extractName(text);
-    if (guess) document.getElementById('fieldName').value = guess;
-  } catch (e) {
-    progressEl.textContent = '';
-    alert("Erreur pendant l'OCR : " + e.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-document.getElementById('ocrAsset').addEventListener('click', runAssetOcr);
-document.getElementById('ocrName').addEventListener('click', runNameOcr);
 
 // ---------- Liste des entrées (persistée localement sur l'appareil) ----------
 function loadEntries() {
@@ -932,11 +840,6 @@ document.getElementById('addEntry').addEventListener('click', () => {
   const commentaire = document.getElementById('fieldComment').value.trim();
   auditContext = getAuditContextFromFields();
   saveAuditContext(auditContext);
-
-  if (!asset || !nom) {
-    alert("Merci de renseigner au minimum le N° Asset et le nom avant d'ajouter à la liste.");
-    return;
-  }
 
   const addingEntry = editingIndex === null;
   if (addingEntry) {
