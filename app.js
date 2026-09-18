@@ -186,7 +186,14 @@ function buildOcrCanvas(state) {
 }
 
 function wireCapture(state) {
-  state.liveBtn.addEventListener('click', () => startLiveScan(state, getLiveConfig(state)));
+  state.liveBtn.addEventListener('click', () => {
+    const config = getLiveConfig(state);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      openFallbackCapture(state, config);
+      return;
+    }
+    startLiveScan(state, config);
+  });
   state.stopLiveBtn.addEventListener('click', () => stopLiveScan(state, true));
   state.fallbackInput.addEventListener('change', async () => {
     const file = state.fallbackInput.files?.[0];
@@ -414,7 +421,6 @@ function getLiveConfig(state) {
   if (state === assetState) {
     return {
       fieldId: 'fieldAsset',
-      rawId: 'rawAsset',
       progressId: 'progressAsset',
       resultId: 'scanResultAsset',
       resultValueId: 'scanResultValueAsset',
@@ -424,7 +430,6 @@ function getLiveConfig(state) {
   }
   return {
     fieldId: 'fieldName',
-    rawId: 'rawName',
     progressId: 'progressName',
     resultId: 'scanResultName',
     resultValueId: 'scanResultValueName',
@@ -577,7 +582,6 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     renderPreview(state);
     const text = await withOcrLock(() => autoRecognize(state, config.score, statusEl));
     if (liveCapture && !state.liveActive) return;
-    document.getElementById(config.rawId).textContent = text.trim();
     const value = config.extract(text);
     if (value) {
       document.getElementById(config.fieldId).value = value;
@@ -799,8 +803,6 @@ document.querySelector('#entryTable tbody').addEventListener('click', (e) => {
     });
     document.getElementById('fieldRoom').value = entry.bureau;
     document.getElementById('fieldComment').value = entry.commentaire;
-    document.getElementById('rawAsset').textContent = '';
-    document.getElementById('rawName').textContent = '';
     document.getElementById('addEntry').textContent = '💾 Enregistrer la modification';
     document.getElementById('cancelEdit').hidden = false;
     document.getElementById('step-extra').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -827,8 +829,6 @@ function resetEntryForm() {
   document.getElementById('fieldAsset').value = '';
   document.getElementById('fieldName').value = '';
   document.getElementById('fieldComment').value = '';
-  document.getElementById('rawAsset').textContent = '';
-  document.getElementById('rawName').textContent = '';
   document.getElementById('addEntry').textContent = '➕ Ajouter à la liste';
   document.getElementById('cancelEdit').hidden = true;
 }

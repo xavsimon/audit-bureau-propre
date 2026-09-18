@@ -342,20 +342,6 @@ input[type="text"] {
   font-size: 1rem;
 }
 
-.raw-text { margin-top: 8px; }
-.raw-text summary { font-size: 0.8rem; color: #777; cursor: pointer; }
-.raw-text pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: #f7f6fa;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px;
-  font-size: 0.78rem;
-  max-height: 140px;
-  overflow-y: auto;
-}
-
 .table-wrap { overflow-x: auto; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
