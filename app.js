@@ -828,6 +828,8 @@ function resetEntryForm() {
   editingContextBackup = null;
   document.getElementById('fieldAsset').value = '';
   document.getElementById('fieldName').value = '';
+  clearLiveResult(getLiveConfig(assetState));
+  clearLiveResult(getLiveConfig(nameState));
   document.getElementById('fieldComment').value = '';
   document.getElementById('addEntry').textContent = '➕ Ajouter à la liste';
   document.getElementById('cancelEdit').hidden = true;
