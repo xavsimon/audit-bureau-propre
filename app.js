@@ -116,9 +116,49 @@ function imageDisplayRect(canvas) {
   return { rect, offX, offY, dispW, dispH };
 }
 
+// Renforce localement les lettres sombres sur un fond clair sans dépendre de
+// la luminosité générale de la photo.
+function applyAdaptiveThreshold(imgData, width, height, invert) {
+  const d = imgData.data;
+  const pixels = width * height;
+  const gray = new Uint8Array(pixels);
+  const stride = width + 1;
+  const integral = new Float32Array((height + 1) * stride);
+
+  for (let y = 0; y < height; y += 1) {
+    let rowSum = 0;
+    for (let x = 0; x < width; x += 1) {
+      const pixel = y * width + x;
+      const value = d[pixel * 4];
+      gray[pixel] = value;
+      rowSum += value;
+      integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + rowSum;
+    }
+  }
+
+  const radius = Math.max(8, Math.round(Math.min(width, height) * 0.015));
+  for (let y = 0; y < height; y += 1) {
+    const y0 = Math.max(0, y - radius);
+    const y1 = Math.min(height - 1, y + radius);
+    for (let x = 0; x < width; x += 1) {
+      const x0 = Math.max(0, x - radius);
+      const x1 = Math.min(width - 1, x + radius);
+      const area = (x1 - x0 + 1) * (y1 - y0 + 1);
+      const sum = integral[(y1 + 1) * stride + x1 + 1]
+        - integral[y0 * stride + x1 + 1]
+        - integral[(y1 + 1) * stride + x0]
+        + integral[y0 * stride + x0];
+      let value = gray[y * width + x] < (sum / area) - 8 ? 0 : 255;
+      if (invert) value = 255 - value;
+      const offset = (y * width + x) * 4;
+      d[offset] = d[offset + 1] = d[offset + 2] = value;
+    }
+  }
+}
+
 // Construit un canvas hors-écran recadré + prétraité (niveaux de gris,
 // contraste étiré, inversion optionnelle) prêt pour l'OCR.
-function buildOcrCanvas(state) {
+function buildOcrCanvas(state, preprocess = 'standard') {
   const { image, rotation, invert, crop } = state;
   const { width: imageWidth, height: imageHeight } = getImageDimensions(image);
   const swapped = rotation % 180 !== 0;
@@ -168,9 +208,19 @@ function buildOcrCanvas(state) {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(rotated, sx, sy, cropW, cropH, 0, 0, outW, outH);
 
-  // 3) Niveaux de gris + étirement de contraste + inversion optionnelle.
+  // 3) Niveaux de gris + prétraitement adapté au type de texte.
   const imgData = ctx.getImageData(0, 0, outW, outH);
   const d = imgData.data;
+  if (preprocess === 'adaptive') {
+    for (let i = 0; i < d.length; i += 4) {
+      const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      d[i] = d[i + 1] = d[i + 2] = gray;
+    }
+    applyAdaptiveThreshold(imgData, outW, outH, invert);
+    ctx.putImageData(imgData, 0, 0);
+    return off;
+  }
+
   let min = 255;
   let max = 0;
   for (let i = 0; i < d.length; i += 4) {
@@ -341,13 +391,30 @@ function scoreNameLines(lines) {
 // Repère la meilleure zone de texte puis la relit en haute qualité. L'étiquette
 // teste d'abord l'orientation la plus fréquente, puis les deux autres ; le nom
 // est traité directement à 0 degré.
-async function autoRecognize(state, scoreFn, detectOrientation, onProgress, isCurrent) {
+async function autoRecognize(
+  state,
+  scoreFn,
+  detectOrientation,
+  onProgress,
+  isCurrent,
+  preprocess = 'standard',
+  progressFloor = 0,
+  reportNoMatch = true
+) {
+  const reportProgress = (percent, message) => {
+    const adjustedPercent = progressFloor
+      ? progressFloor + Math.round((percent * (100 - progressFloor)) / 100)
+      : percent;
+    onProgress(adjustedPercent, message);
+  };
   const worker = await getWorker();
   let best = null;
   const rotations = detectOrientation ? ROTATIONS : [0];
 
   await worker.setParameters({ tessedit_pageseg_mode: '11' });
-  onProgress(10, detectOrientation ? 'Préparation des 3 orientations (90° en premier)...' : 'Recherche du nom...');
+  reportProgress(10, detectOrientation
+    ? 'Préparation des 3 orientations (90° en premier)...'
+    : preprocess === 'adaptive' ? 'Renforcement du contraste de l’écran...' : 'Recherche du nom...');
   for (let i = 0; i < rotations.length; i += 1) {
     if (!isCurrent()) return '';
     const rotation = rotations[i];
@@ -355,10 +422,10 @@ async function autoRecognize(state, scoreFn, detectOrientation, onProgress, isCu
     const message = detectOrientation
       ? `Reconnaissance de l'orientation... (${i + 1}/${rotations.length})`
       : 'Reconnaissance du nom...';
-    onProgress(percent, message);
+    reportProgress(percent, message);
     state.rotation = rotation;
     state.crop = null;
-    const canvas = buildOcrCanvas(state);
+    const canvas = buildOcrCanvas(state, preprocess);
     // eslint-disable-next-line no-await-in-loop
     const { data } = await worker.recognize(canvas, {}, { blocks: true });
     if (!isCurrent()) return '';
@@ -381,7 +448,7 @@ async function autoRecognize(state, scoreFn, detectOrientation, onProgress, isCu
     state.rotation = 0;
     state.crop = null;
     renderPreview(state);
-    onProgress(100, 'Aucun texte détecté.');
+    if (reportNoMatch) reportProgress(100, 'Aucun texte détecté.');
     return '';
   }
 
@@ -402,12 +469,12 @@ async function autoRecognize(state, scoreFn, detectOrientation, onProgress, isCu
   };
   renderPreview(state);
 
-  onProgress(90, 'Lecture précise...');
+  reportProgress(90, 'Lecture précise...');
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
-  const refinedCanvas = buildOcrCanvas(state);
+  const refinedCanvas = buildOcrCanvas(state, preprocess);
   const { data } = await worker.recognize(refinedCanvas, {}, { text: true });
   if (!isCurrent()) return '';
-  onProgress(100, 'Reconnaissance terminée.');
+  reportProgress(100, 'Reconnaissance terminée.');
   return data.text || '';
 }
 
@@ -662,13 +729,30 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     state.crop = null;
     state.image = image;
     renderPreview(state);
-    const text = await withOcrLock(() => autoRecognize(
-      state,
-      config.score,
-      config.detectOrientation,
-      reportProgress,
-      () => analysisGeneration === state.analysisGeneration
-    ));
+    const text = await withOcrLock(async () => {
+      let recognizedText = await autoRecognize(
+        state,
+        config.score,
+        config.detectOrientation,
+        reportProgress,
+        () => analysisGeneration === state.analysisGeneration,
+        'standard',
+        0,
+        !config.retryPreprocess
+      );
+      if (config.retryPreprocess && !config.extract(recognizedText)) {
+        recognizedText = await autoRecognize(
+          state,
+          config.score,
+          config.detectOrientation,
+          reportProgress,
+          () => analysisGeneration === state.analysisGeneration,
+          'adaptive',
+          80
+        );
+      }
+      return recognizedText;
+    });
     if (analysisGeneration !== state.analysisGeneration) return;
     if (liveCapture && !state.liveActive) return;
     const value = config.extract(text);
