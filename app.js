@@ -962,6 +962,7 @@ let entries = loadEntries();
 let auditStats = loadAuditStats();
 let unsecuredEntries = loadStoredList(UNSECURED_ENTRIES_STORAGE_KEY);
 let otherComments = loadStoredList(OTHER_COMMENTS_STORAGE_KEY);
+let editingUnsecuredIndex = null;
 
 function renderAuditCounters() {
   document.getElementById('securedCount').textContent = auditStats.secured;
@@ -1007,11 +1008,27 @@ function resetUnsecuredModal() {
   document.getElementById('unsecuredAsset').value = '';
   document.getElementById('unsecuredName').value = '';
   document.getElementById('unsecuredComment').value = '';
+  document.getElementById('unsecured-modal-title').textContent = 'Ajouter un PC non sécurisé';
+  editingUnsecuredIndex = null;
+}
+
+function openUnsecuredModal(index = null) {
+  if (index === null) {
+    resetUnsecuredModal();
+  } else {
+    const entry = unsecuredEntries[index];
+    if (!entry) return;
+    editingUnsecuredIndex = index;
+    document.getElementById('unsecured-modal-title').textContent = 'Modifier un PC non sécurisé';
+    document.getElementById('unsecuredAsset').value = entry.asset || '';
+    document.getElementById('unsecuredName').value = entry.nom || '';
+    document.getElementById('unsecuredComment').value = entry.commentaire || '';
+  }
+  openAuditModal('unsecuredModal');
 }
 
 document.getElementById('addUnsecuredFree').addEventListener('click', () => {
-  resetUnsecuredModal();
-  openAuditModal('unsecuredModal');
+  openUnsecuredModal();
 });
 
 document.getElementById('scanUnsecuredAsset').addEventListener('click', () => prepareModalCapture(assetState));
@@ -1028,14 +1045,23 @@ document.getElementById('confirmUnsecured').addEventListener('click', () => {
     alert('Renseignez au moins une information pour ce PC.');
     return;
   }
-  const now = new Date();
-  unsecuredEntries.push({
-    date: now.toLocaleDateString('fr-FR'),
-    heure: now.toLocaleTimeString('fr-FR'),
-    asset,
-    nom,
-    commentaire,
-  });
+  if (editingUnsecuredIndex === null) {
+    const now = new Date();
+    unsecuredEntries.push({
+      date: now.toLocaleDateString('fr-FR'),
+      heure: now.toLocaleTimeString('fr-FR'),
+      asset,
+      nom,
+      commentaire,
+    });
+  } else {
+    unsecuredEntries[editingUnsecuredIndex] = {
+      ...unsecuredEntries[editingUnsecuredIndex],
+      asset,
+      nom,
+      commentaire,
+    };
+  }
   saveStoredList(UNSECURED_ENTRIES_STORAGE_KEY, unsecuredEntries);
   renderAuditCounters();
   renderTable();
@@ -1074,13 +1100,16 @@ function renderTable() {
   const tbody = document.querySelector('#entryTable tbody');
   tbody.innerHTML = '';
   unsecuredEntries.forEach((entry) => {
+    const index = unsecuredEntries.indexOf(entry);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${entry.date}</td>
-      <td>${entry.heure}</td>
       <td>${escapeHtml(entry.asset)}</td>
       <td>${escapeHtml(entry.nom)}</td>
       <td>${escapeHtml(entry.commentaire)}</td>
+      <td>
+        <button class="row-action row-edit" data-idx="${index}" type="button" title="Modifier ce PC" aria-label="Modifier ce PC">✎</button>
+        <button class="row-action row-del" data-idx="${index}" type="button" title="Supprimer ce PC" aria-label="Supprimer ce PC">✕</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -1092,6 +1121,22 @@ function escapeHtml(s) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
 }
+
+document.querySelector('#entryTable tbody').addEventListener('click', (event) => {
+  const editButton = event.target.closest('.row-edit');
+  if (editButton) {
+    openUnsecuredModal(Number(editButton.dataset.idx));
+    return;
+  }
+  const deleteButton = event.target.closest('.row-del');
+  if (!deleteButton) return;
+  const index = Number(deleteButton.dataset.idx);
+  if (!unsecuredEntries[index] || !confirm('Supprimer ce PC de la liste ?')) return;
+  unsecuredEntries.splice(index, 1);
+  saveStoredList(UNSECURED_ENTRIES_STORAGE_KEY, unsecuredEntries);
+  renderAuditCounters();
+  renderTable();
+});
 
 document.getElementById('clearAll').addEventListener('click', () => {
   const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator
@@ -1105,6 +1150,7 @@ function resetAuditData() {
   auditStats = { secured: 0, unsecuredWithCollaborator: 0 };
   unsecuredEntries = [];
   otherComments = [];
+  editingUnsecuredIndex = null;
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
   localStorage.removeItem(UNSECURED_ENTRIES_STORAGE_KEY);

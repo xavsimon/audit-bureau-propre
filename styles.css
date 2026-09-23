@@ -137,7 +137,7 @@ main {
   flex: 0 0 auto;
   min-width: 120px;
   height: 68px;
-  background: var(--secondary);
+  background: var(--primary);
   color: #fff;
 }
 .support-only { display: none !important; }
@@ -507,11 +507,13 @@ th, td {
 th { background: #efe9f6; }
 th:last-child, td:last-child { white-space: nowrap; }
 
-.row-del {
-  background: none;
-  border: none;
-  color: var(--danger);
+.row-action {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 6px;
   font-size: 1.1rem;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -520,10 +522,13 @@ th:last-child, td:last-child { white-space: nowrap; }
   border: none;
   border-radius: 6px;
   color: #fff;
-  font-size: 0.8rem;
-  padding: 6px 8px;
-  cursor: pointer;
   margin-right: 4px;
+}
+
+.row-del {
+  background: none;
+  border: 1px solid var(--danger);
+  color: var(--danger);
 }
 
 .export-row {
