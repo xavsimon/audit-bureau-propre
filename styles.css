@@ -124,24 +124,29 @@ main {
 .btn-secondary { background: var(--secondary); color: #fff; width: 100%; margin-bottom: 8px; }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-counter {
-  width: 52px;
-  height: 48px;
+  flex: 0 0 clamp(72px, 20%, 112px);
+  height: 68px;
   padding: 0;
   background: var(--primary);
   color: #fff;
-  font-size: 1.6rem;
+  font-size: 2.4rem;
   line-height: 1;
 }
 .counter-controls {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
+  width: 100%;
+  gap: 12px;
 }
 .counter-value {
-  min-width: 3ch;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 68px;
   color: var(--primary-dark);
-  font-size: 2rem;
+  font-size: 2.4rem;
   font-weight: 700;
   text-align: center;
   font-variant-numeric: tabular-nums;
