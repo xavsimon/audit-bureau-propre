@@ -7,7 +7,7 @@
  */
 
 const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
-const CONTEXT_STORAGE_KEY = 'audit-bureau-propre-context-v1';
+const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
 function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId, ocrLoadingId, scanProgressId) {
@@ -493,10 +493,15 @@ async function autoRecognize(
 function extractAssetNumber(text) {
   const cleaned = text.replace(/\r/g, '');
   let m = cleaned.match(/asset[^A-Za-z0-9]{0,4}([A-Za-z0-9][A-Za-z0-9\-]{2,14})/i);
-  if (m) return m[1].toUpperCase();
-  m = cleaned.match(/\b([A-Z]{1,3}\d{4,8})\b/);
-  if (m) return m[1].toUpperCase();
+  if (m) return normalizeAssetNumber(m[1]);
+  m = cleaned.match(/\b([A-Z5]{1,3}\d{4,8})\b/);
+  if (m) return normalizeAssetNumber(m[1]);
   return '';
+}
+
+function normalizeAssetNumber(value) {
+  const normalized = value.toUpperCase();
+  return normalized.startsWith('5') ? `S${normalized.slice(1)}` : normalized;
 }
 
 const NAME_STOPWORDS = /pour d[ée]verrouiller|options? de connexion|mot de passe|entrer|appuyez|glissez|touch id|face id|empreinte|verrouill|lecteur|analysez|doigt|windows|iphone|ipad|entsperren|password|pin\b/i;
@@ -922,68 +927,42 @@ function saveEntries(entries) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
-function loadAuditContext() {
+function loadAuditStats() {
   try {
-    const stored = JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY) || '{}');
+    const stored = JSON.parse(localStorage.getItem(AUDIT_STATS_STORAGE_KEY) || '{}');
     return {
-      etage: String(stored.etage || ''),
-      bu: String(stored.bu || ''),
-      agence: String(stored.agence || ''),
+      secured: Math.max(0, Number.parseInt(stored.secured, 10) || 0),
+      unsecuredWithCollaborator: Math.max(0, Number.parseInt(stored.unsecuredWithCollaborator, 10) || 0),
     };
   } catch (e) {
-    return { etage: '', bu: '', agence: '' };
+    return { secured: 0, unsecuredWithCollaborator: 0 };
   }
 }
 
-function saveAuditContext(context) {
-  localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(context));
+function saveAuditStats() {
+  localStorage.setItem(AUDIT_STATS_STORAGE_KEY, JSON.stringify(auditStats));
 }
-
-let auditContext = loadAuditContext();
-const contextFieldMap = {
-  fieldFloor: 'etage',
-  fieldBu: 'bu',
-  fieldAgency: 'agence',
-};
-
-Object.entries(contextFieldMap).forEach(([fieldId, contextKey]) => {
-  const field = document.getElementById(fieldId);
-  field.value = auditContext[contextKey];
-  field.addEventListener('input', () => {
-    auditContext = {
-      ...auditContext,
-      [contextKey]: field.value,
-    };
-    saveAuditContext(auditContext);
-  });
-});
 
 let entries = loadEntries();
+let auditStats = loadAuditStats();
 let editingIndex = null;
-let editingContextBackup = null;
 
-if (entries.length) {
-  document.querySelector('#audit-context details').open = false;
+function renderAuditCounters() {
+  document.getElementById('securedCount').textContent = auditStats.secured;
+  document.getElementById('unsecuredCount').textContent = auditStats.unsecuredWithCollaborator;
 }
 
-function getAuditContextFromFields() {
-  return {
-    etage: document.getElementById('fieldFloor').value.trim(),
-    bu: document.getElementById('fieldBu').value.trim(),
-    agence: document.getElementById('fieldAgency').value.trim(),
-  };
+function changeAuditCounter(counter, amount) {
+  auditStats[counter] = Math.max(0, auditStats[counter] + amount);
+  saveAuditStats();
+  renderAuditCounters();
 }
 
-function setAuditContextFields(context) {
-  auditContext = {
-    etage: context.etage || '',
-    bu: context.bu || '',
-    agence: context.agence || '',
-  };
-  document.getElementById('fieldFloor').value = auditContext.etage;
-  document.getElementById('fieldBu').value = auditContext.bu;
-  document.getElementById('fieldAgency').value = auditContext.agence;
-}
+document.getElementById('incrementSecured').addEventListener('click', () => changeAuditCounter('secured', 1));
+document.getElementById('decrementSecured').addEventListener('click', () => changeAuditCounter('secured', -1));
+document.getElementById('incrementUnsecured').addEventListener('click', () => changeAuditCounter('unsecuredWithCollaborator', 1));
+document.getElementById('decrementUnsecured').addEventListener('click', () => changeAuditCounter('unsecuredWithCollaborator', -1));
+renderAuditCounters();
 
 function renderTable() {
   const tbody = document.querySelector('#entryTable tbody');
@@ -1019,15 +998,9 @@ document.querySelector('#entryTable tbody').addEventListener('click', (e) => {
     const idx = Number(editBtn.dataset.idx);
     const entry = entries[idx];
     if (!entry) return;
-    editingContextBackup = getAuditContextFromFields();
     editingIndex = idx;
     document.getElementById('fieldAsset').value = entry.asset;
     document.getElementById('fieldName').value = entry.nom;
-    setAuditContextFields({
-      etage: entry.etage || editingContextBackup.etage,
-      bu: entry.bu || editingContextBackup.bu,
-      agence: entry.agence || editingContextBackup.agence,
-    });
     document.getElementById('fieldRoom').value = entry.bureau;
     document.getElementById('fieldComment').value = entry.commentaire;
     document.getElementById('addEntry').textContent = '💾 Enregistrer la modification';
@@ -1047,12 +1020,7 @@ document.querySelector('#entryTable tbody').addEventListener('click', (e) => {
 });
 
 function resetEntryForm() {
-  if (editingIndex !== null && editingContextBackup) {
-    setAuditContextFields(editingContextBackup);
-    saveAuditContext(auditContext);
-  }
   editingIndex = null;
-  editingContextBackup = null;
   document.getElementById('fieldAsset').value = '';
   document.getElementById('fieldName').value = '';
   clearLiveResult(assetState, getLiveConfig(assetState));
@@ -1067,8 +1035,6 @@ document.getElementById('addEntry').addEventListener('click', () => {
   const nom = document.getElementById('fieldName').value.trim();
   const bureau = document.getElementById('fieldRoom').value.trim();
   const commentaire = document.getElementById('fieldComment').value.trim();
-  auditContext = getAuditContextFromFields();
-  saveAuditContext(auditContext);
 
   const addingEntry = editingIndex === null;
   if (addingEntry) {
@@ -1078,9 +1044,6 @@ document.getElementById('addEntry').addEventListener('click', () => {
       heure: now.toLocaleTimeString('fr-FR'),
       asset,
       nom,
-      etage: auditContext.etage,
-      bu: auditContext.bu,
-      agence: auditContext.agence,
       bureau,
       commentaire,
     });
@@ -1089,36 +1052,30 @@ document.getElementById('addEntry').addEventListener('click', () => {
       ...entries[editingIndex],
       asset,
       nom,
-      etage: auditContext.etage,
-      bu: auditContext.bu,
-      agence: auditContext.agence,
       bureau,
       commentaire,
     };
   }
   saveEntries(entries);
   renderTable();
-  if (addingEntry) document.querySelector('#audit-context details').open = false;
 
   // Réinitialise les champs de saisie pour la prochaine machine (garde le bureau).
-  editingContextBackup = null;
   resetEntryForm();
 });
 
 document.getElementById('cancelEdit').addEventListener('click', resetEntryForm);
 
 document.getElementById('clearAll').addEventListener('click', () => {
-  if (entries.length && !confirm('Supprimer définitivement toutes les entrées de la liste ?')) return;
+  const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator;
+  if (hasAuditData && !confirm('Supprimer définitivement toutes les entrées et remettre les compteurs à zéro ?')) return;
   entries = [];
   editingIndex = null;
-  editingContextBackup = null;
+  auditStats = { secured: 0, unsecuredWithCollaborator: 0 };
   resetEntryForm();
-  setAuditContextFields({});
   document.getElementById('fieldRoom').value = '';
-  saveAuditContext(auditContext);
   localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(CONTEXT_STORAGE_KEY);
-  document.querySelector('#audit-context details').open = true;
+  localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
+  renderAuditCounters();
   renderTable();
 });
 
@@ -1128,14 +1085,19 @@ function buildExportWorkbook() {
     Heure: e.heure,
     'N° Asset': e.asset,
     'Nom de la personne connectée': e.nom,
-    Étage: e.etage || '',
-    BU: e.bu || '',
-    Agence: e.agence || '',
     'Bureau / Salle': e.bureau,
     Commentaire: e.commentaire,
   }));
+  rows.push({
+    Date: 'Bilan de l’audit',
+    Heure: '',
+    'N° Asset': '',
+    'Nom de la personne connectée': '',
+    'Bureau / Salle': '',
+    Commentaire: `PCs sécurisés : ${auditStats.secured} | PCs non sécurisés avec collaborateur devant le PC : ${auditStats.unsecuredWithCollaborator}`,
+  });
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 30 }];
+  ws['!cols'] = [{ wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 }, { wch: 78 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'PC non attachés');
   return wb;
@@ -1160,8 +1122,8 @@ function downloadExportFile(file) {
 }
 
 function ensureEntriesForExport() {
-  if (!entries.length) {
-    alert('La liste est vide.');
+  if (!entries.length && !auditStats.secured && !auditStats.unsecuredWithCollaborator) {
+    alert('La liste et les compteurs sont vides.');
     return false;
   }
   return true;

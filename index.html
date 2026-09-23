@@ -15,24 +15,22 @@
 
 <main>
 
-  <section class="card audit-context" id="audit-context">
-    <details open>
-      <summary>Informations du PC</summary>
-    <div class="context-grid">
-      <div>
-        <label class="field-label" for="fieldFloor">Étage</label>
-        <input type="text" id="fieldFloor" placeholder="ex : 3e" autocomplete="off">
-      </div>
-      <div>
-        <label class="field-label" for="fieldBu">BU</label>
-        <input type="text" id="fieldBu" placeholder="ex : Conseil" autocomplete="off">
-      </div>
-      <div>
-        <label class="field-label" for="fieldAgency">Agence</label>
-        <input type="text" id="fieldAgency" placeholder="ex : Paris" autocomplete="off">
-      </div>
+  <section class="card audit-counter" aria-labelledby="secured-pcs-title">
+    <h2 id="secured-pcs-title">PCs sécurisés</h2>
+    <div class="counter-controls">
+      <button class="btn btn-counter" id="decrementSecured" type="button" aria-label="Retirer un PC sécurisé">−</button>
+      <output class="counter-value" id="securedCount" aria-live="polite">0</output>
+      <button class="btn btn-counter" id="incrementSecured" type="button" aria-label="Ajouter un PC sécurisé">+</button>
     </div>
-    </details>
+  </section>
+
+  <section class="card audit-counter" aria-labelledby="unsecured-pcs-title">
+    <h2 id="unsecured-pcs-title">PCs non sécurisés avec collaborateur devant le PC</h2>
+    <div class="counter-controls">
+      <button class="btn btn-counter" id="decrementUnsecured" type="button" aria-label="Retirer un PC non sécurisé avec collaborateur devant le PC">−</button>
+      <output class="counter-value" id="unsecuredCount" aria-live="polite">0</output>
+      <button class="btn btn-counter" id="incrementUnsecured" type="button" aria-label="Ajouter un PC non sécurisé avec collaborateur devant le PC">+</button>
+    </div>
   </section>
 
   <section class="card" id="step-asset">

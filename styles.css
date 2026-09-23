@@ -97,12 +97,6 @@ main {
   color: var(--primary-dark);
 }
 
-.context-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
 .capture-row {
   display: flex;
   gap: 8px;
@@ -129,6 +123,30 @@ main {
 .btn-share { background: #0f6b5b; color: #fff; }
 .btn-secondary { background: var(--secondary); color: #fff; width: 100%; margin-bottom: 8px; }
 .btn-danger { background: var(--danger); color: #fff; }
+.btn-counter {
+  width: 52px;
+  height: 48px;
+  padding: 0;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.counter-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.counter-value {
+  min-width: 3ch;
+  color: var(--primary-dark);
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.audit-counter h2 { margin-bottom: 14px; }
 .btn-add {
   display: block;
   width: 100%;
@@ -350,12 +368,11 @@ main {
 
 .camera-controls .btn:only-child { flex: 0 1 240px; margin: 0 auto; }
 
-.audit-context details summary, .photo-preview summary {
+.photo-preview summary {
   color: var(--primary-dark);
   cursor: pointer;
   font-weight: 600;
 }
-.audit-context details summary { font-size: 1.05rem; }
 .photo-preview { margin: 8px 0; }
 .photo-preview summary { font-size: 0.8rem; color: #777; }
 
@@ -435,10 +452,6 @@ th:last-child, td:last-child { white-space: nowrap; }
   padding: 6px 8px;
   cursor: pointer;
   margin-right: 4px;
-}
-
-@media (max-width: 480px) {
-  .context-grid { grid-template-columns: 1fr; }
 }
 
 .export-row {
