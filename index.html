@@ -4,12 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Audit Bureau Propre</title>
-<link rel="stylesheet" href="styles.css?v=1.26.0">
+<link id="appStylesheet" rel="stylesheet">
+<script>
+  const assetCacheKey = `v=1.27.0&reload=${Date.now()}`;
+  document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
+</script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.26.0</span>
+  <span class="version-badge">Version 1.27.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -210,8 +214,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js"></script>
-<script src="vendor/xlsx.full.min.js"></script>
-<script src="app.js"></script>
+<script src="vendor/tesseract.min.js?v=1.27.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.27.0"></script>
+<script src="app.js?v=1.27.0"></script>
 </body>
 </html>
