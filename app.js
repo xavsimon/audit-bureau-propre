@@ -1107,8 +1107,8 @@ function renderTable() {
       <td>${escapeHtml(entry.nom)}</td>
       <td>${escapeHtml(entry.commentaire)}</td>
       <td>
-        <button class="row-action row-edit" data-idx="${index}" type="button" title="Modifier ce PC" aria-label="Modifier ce PC">✎</button>
-        <button class="row-action row-del" data-idx="${index}" type="button" title="Supprimer ce PC" aria-label="Supprimer ce PC">✕</button>
+        <button class="row-action row-edit" data-idx="${index}" type="button" title="Modifier ce PC" aria-label="Modifier ce PC">🖉</button>
+        <button class="row-action row-del" data-idx="${index}" type="button" title="Supprimer ce PC" aria-label="Supprimer ce PC">🗑</button>
       </td>
     `;
     tbody.appendChild(tr);

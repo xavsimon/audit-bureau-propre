@@ -512,6 +512,8 @@ th:last-child, td:last-child { white-space: nowrap; }
   height: 36px;
   padding: 0;
   border-radius: 6px;
+  font-family: "Segoe UI Symbol", "Segoe UI Emoji", sans-serif;
+  font-weight: 700;
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
