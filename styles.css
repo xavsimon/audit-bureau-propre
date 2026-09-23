@@ -585,7 +585,7 @@ th:last-child, td:last-child { white-space: nowrap; }
 }
 
 @media (max-width: 480px) {
-  .summary-grid { grid-template-columns: 1fr; }
+  .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .modal-scan-row { flex-direction: column; }
   .modal-actions .btn { flex: 1; }
 }
