@@ -98,6 +98,42 @@ main {
   color: var(--primary-dark);
 }
 
+.audit-summary h2 { margin-bottom: 14px; }
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summary-metric {
+  display: flex;
+  min-height: 86px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8f6fb;
+  text-align: center;
+}
+
+.summary-total { background: #eee9f5; }
+
+.summary-label {
+  color: #555;
+  font-size: 0.78rem;
+}
+
+.summary-value {
+  color: var(--primary-dark);
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .capture-row {
   display: flex;
   gap: 8px;
@@ -549,6 +585,7 @@ th:last-child, td:last-child { white-space: nowrap; }
 }
 
 @media (max-width: 480px) {
+  .summary-grid { grid-template-columns: 1fr; }
   .modal-scan-row { flex-direction: column; }
   .modal-actions .btn { flex: 1; }
 }

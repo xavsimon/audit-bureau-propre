@@ -969,6 +969,13 @@ function renderAuditCounters() {
   document.getElementById('unsecuredCount').textContent = auditStats.unsecuredWithCollaborator;
   document.getElementById('unsecuredFreeCount').textContent = unsecuredEntries.length;
   document.getElementById('otherCount').textContent = otherComments.length;
+  const totalSeen = auditStats.secured + auditStats.unsecuredWithCollaborator + unsecuredEntries.length;
+  const rateBase = auditStats.secured + auditStats.unsecuredWithCollaborator;
+  const securedRate = rateBase ? Math.round((auditStats.secured / rateBase) * 100) : 0;
+  const unsecuredRate = rateBase ? Math.round((auditStats.unsecuredWithCollaborator / rateBase) * 100) : 0;
+  document.getElementById('totalSeenCount').textContent = totalSeen;
+  document.getElementById('securedRate').textContent = `${securedRate} %`;
+  document.getElementById('unsecuredRate').textContent = `${unsecuredRate} %`;
 }
 
 function changeAuditCounter(counter, amount) {
