@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.18.0</span>
+  <span class="version-badge">Version 1.19.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -18,18 +18,34 @@
   <section class="card audit-counter" aria-labelledby="secured-pcs-title">
     <h2 id="secured-pcs-title">PCs sécurisés</h2>
     <div class="counter-controls">
-      <button class="btn btn-counter" id="decrementSecured" type="button" aria-label="Retirer un PC sécurisé">−</button>
       <output class="counter-value" id="securedCount" aria-live="polite">0</output>
       <button class="btn btn-counter" id="incrementSecured" type="button" aria-label="Ajouter un PC sécurisé">+</button>
+      <button class="btn btn-counter" id="decrementSecured" type="button" aria-label="Retirer un PC sécurisé">−</button>
     </div>
   </section>
 
   <section class="card audit-counter" aria-labelledby="unsecured-pcs-title">
     <h2 id="unsecured-pcs-title">PCs non sécurisés avec collaborateur devant le PC</h2>
     <div class="counter-controls">
-      <button class="btn btn-counter" id="decrementUnsecured" type="button" aria-label="Retirer un PC non sécurisé avec collaborateur devant le PC">−</button>
       <output class="counter-value" id="unsecuredCount" aria-live="polite">0</output>
       <button class="btn btn-counter" id="incrementUnsecured" type="button" aria-label="Ajouter un PC non sécurisé avec collaborateur devant le PC">+</button>
+      <button class="btn btn-counter" id="decrementUnsecured" type="button" aria-label="Retirer un PC non sécurisé avec collaborateur devant le PC">−</button>
+    </div>
+  </section>
+
+  <section class="card audit-counter" aria-labelledby="unsecured-free-title">
+    <h2 id="unsecured-free-title">PCs non sécurisés</h2>
+    <div class="counter-controls">
+      <output class="counter-value" id="unsecuredFreeCount" aria-live="polite">0</output>
+      <button class="btn btn-counter-add" id="addUnsecuredFree" type="button">Ajouter</button>
+    </div>
+  </section>
+
+  <section class="card audit-counter" aria-labelledby="other-title">
+    <h2 id="other-title">Autres</h2>
+    <div class="counter-controls">
+      <output class="counter-value" id="otherCount" aria-live="polite">0</output>
+      <button class="btn btn-counter-add" id="addOther" type="button">Ajouter</button>
     </div>
   </section>
 
@@ -168,6 +184,38 @@
     volontairement quitte l'application.
   </p>
 </main>
+
+<div class="audit-modal" id="unsecuredModal" hidden role="dialog" aria-modal="true" aria-labelledby="unsecured-modal-title">
+  <div class="audit-modal-content">
+    <h2 id="unsecured-modal-title">Ajouter un PC non sécurisé</h2>
+    <div class="modal-scan-row">
+      <button class="btn btn-live" id="scanUnsecuredAsset" type="button">Scanner l'étiquette</button>
+      <button class="btn btn-live" id="scanUnsecuredName" type="button">Scanner l'écran de verrouillage</button>
+    </div>
+    <label class="field-label" for="unsecuredAsset">N° Asset</label>
+    <input type="text" id="unsecuredAsset" placeholder="ex : S165964" autocomplete="off">
+    <label class="field-label" for="unsecuredName">Nom de la personne connectée</label>
+    <input type="text" id="unsecuredName" placeholder="ex : SIMON Xavier" autocomplete="off">
+    <label class="field-label" for="unsecuredComment">Commentaire</label>
+    <textarea id="unsecuredComment" rows="4" placeholder="ex : câble antivol absent"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelUnsecured" type="button">Annuler</button>
+      <button class="btn btn-primary" id="confirmUnsecured" type="button">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="audit-modal" id="otherModal" hidden role="dialog" aria-modal="true" aria-labelledby="other-modal-title">
+  <div class="audit-modal-content">
+    <h2 id="other-modal-title">Ajouter un commentaire</h2>
+    <label class="field-label" for="otherComment">Commentaire</label>
+    <textarea id="otherComment" rows="5" placeholder="Saisissez votre commentaire"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelOther" type="button">Annuler</button>
+      <button class="btn btn-primary" id="confirmOther" type="button">OK</button>
+    </div>
+  </div>
+</div>
 
 <script src="vendor/tesseract.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>

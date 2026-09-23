@@ -8,6 +8,8 @@
 
 const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
+const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
+const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
 function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId, ocrLoadingId, scanProgressId) {
@@ -706,6 +708,13 @@ function flashLiveFailure(state) {
   flashScanFailure();
 }
 
+function syncUnsecuredModalField(fieldId) {
+  const modal = document.getElementById('unsecuredModal');
+  if (modal.hidden) return;
+  const targetId = fieldId === 'fieldAsset' ? 'unsecuredAsset' : 'unsecuredName';
+  document.getElementById(targetId).value = document.getElementById(fieldId).value;
+}
+
 function clearLiveResult(state, config) {
   state.analysisGeneration += 1;
   document.getElementById(config.resultId).hidden = true;
@@ -791,6 +800,7 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     const value = config.extract(text);
     if (value) {
       document.getElementById(config.fieldId).value = value;
+      syncUnsecuredModalField(config.fieldId);
       if (liveCapture) {
         resetScanProgress(state, config);
         state.liveResultValue.textContent = value;
@@ -939,17 +949,35 @@ function loadAuditStats() {
   }
 }
 
+function loadStoredList(key) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(stored) ? stored : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveStoredList(key, values) {
+  localStorage.setItem(key, JSON.stringify(values));
+}
+
 function saveAuditStats() {
   localStorage.setItem(AUDIT_STATS_STORAGE_KEY, JSON.stringify(auditStats));
 }
 
 let entries = loadEntries();
 let auditStats = loadAuditStats();
+let unsecuredEntries = loadStoredList(UNSECURED_ENTRIES_STORAGE_KEY);
+let otherComments = loadStoredList(OTHER_COMMENTS_STORAGE_KEY);
 let editingIndex = null;
+let modalCaptureBackup = null;
 
 function renderAuditCounters() {
   document.getElementById('securedCount').textContent = auditStats.secured;
   document.getElementById('unsecuredCount').textContent = auditStats.unsecuredWithCollaborator;
+  document.getElementById('unsecuredFreeCount').textContent = unsecuredEntries.length;
+  document.getElementById('otherCount').textContent = otherComments.length;
 }
 
 function changeAuditCounter(counter, amount) {
@@ -963,6 +991,111 @@ document.getElementById('decrementSecured').addEventListener('click', () => chan
 document.getElementById('incrementUnsecured').addEventListener('click', () => changeAuditCounter('unsecuredWithCollaborator', 1));
 document.getElementById('decrementUnsecured').addEventListener('click', () => changeAuditCounter('unsecuredWithCollaborator', -1));
 renderAuditCounters();
+
+function openAuditModal(id) {
+  document.getElementById(id).hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+function closeAuditModal(id) {
+  document.getElementById(id).hidden = true;
+  if (!document.querySelector('.audit-modal:not([hidden])')) document.body.classList.remove('modal-open');
+}
+
+function prepareModalCapture(state) {
+  if (!modalCaptureBackup) {
+    modalCaptureBackup = {
+      asset: document.getElementById('fieldAsset').value,
+      name: document.getElementById('fieldName').value,
+    };
+  }
+  const config = getLiveConfig(state);
+  clearLiveResult(state, config);
+  document.getElementById(config.fieldId).value = '';
+  state.liveBtn.click();
+}
+
+function restoreModalCaptureFields() {
+  if (!modalCaptureBackup) return;
+  document.getElementById('fieldAsset').value = modalCaptureBackup.asset;
+  document.getElementById('fieldName').value = modalCaptureBackup.name;
+  modalCaptureBackup = null;
+}
+
+function resetUnsecuredModal() {
+  document.getElementById('unsecuredAsset').value = '';
+  document.getElementById('unsecuredName').value = '';
+  document.getElementById('unsecuredComment').value = '';
+}
+
+document.getElementById('fieldAsset').addEventListener('input', () => syncUnsecuredModalField('fieldAsset'));
+document.getElementById('fieldName').addEventListener('input', () => syncUnsecuredModalField('fieldName'));
+
+document.getElementById('addUnsecuredFree').addEventListener('click', () => {
+  resetUnsecuredModal();
+  modalCaptureBackup = {
+    asset: document.getElementById('fieldAsset').value,
+    name: document.getElementById('fieldName').value,
+  };
+  openAuditModal('unsecuredModal');
+});
+
+document.getElementById('scanUnsecuredAsset').addEventListener('click', () => prepareModalCapture(assetState));
+document.getElementById('scanUnsecuredName').addEventListener('click', () => prepareModalCapture(nameState));
+document.getElementById('cancelUnsecured').addEventListener('click', () => {
+  closeAuditModal('unsecuredModal');
+  restoreModalCaptureFields();
+  resetUnsecuredModal();
+});
+document.getElementById('confirmUnsecured').addEventListener('click', () => {
+  const asset = document.getElementById('unsecuredAsset').value.trim();
+  const nom = document.getElementById('unsecuredName').value.trim();
+  const commentaire = document.getElementById('unsecuredComment').value.trim();
+  if (!asset && !nom && !commentaire) {
+    alert('Renseignez au moins une information pour ce PC.');
+    return;
+  }
+  const now = new Date();
+  unsecuredEntries.push({
+    date: now.toLocaleDateString('fr-FR'),
+    heure: now.toLocaleTimeString('fr-FR'),
+    asset,
+    nom,
+    commentaire,
+  });
+  saveStoredList(UNSECURED_ENTRIES_STORAGE_KEY, unsecuredEntries);
+  renderAuditCounters();
+  closeAuditModal('unsecuredModal');
+  restoreModalCaptureFields();
+  resetUnsecuredModal();
+});
+
+document.getElementById('addOther').addEventListener('click', () => {
+  document.getElementById('otherComment').value = '';
+  openAuditModal('otherModal');
+  document.getElementById('otherComment').focus();
+});
+document.getElementById('cancelOther').addEventListener('click', () => {
+  closeAuditModal('otherModal');
+  document.getElementById('otherComment').value = '';
+});
+document.getElementById('confirmOther').addEventListener('click', () => {
+  const commentaire = document.getElementById('otherComment').value.trim();
+  if (!commentaire) {
+    alert('Saisissez un commentaire.');
+    return;
+  }
+  const now = new Date();
+  otherComments.push({
+    date: now.toLocaleDateString('fr-FR'),
+    heure: now.toLocaleTimeString('fr-FR'),
+    commentaire,
+  });
+  saveStoredList(OTHER_COMMENTS_STORAGE_KEY, otherComments);
+  renderAuditCounters();
+  closeAuditModal('otherModal');
+  document.getElementById('otherComment').value = '';
+});
 
 function renderTable() {
   const tbody = document.querySelector('#entryTable tbody');
@@ -1066,40 +1199,54 @@ document.getElementById('addEntry').addEventListener('click', () => {
 document.getElementById('cancelEdit').addEventListener('click', resetEntryForm);
 
 document.getElementById('clearAll').addEventListener('click', () => {
-  const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator;
+  const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator
+    || unsecuredEntries.length || otherComments.length;
   if (hasAuditData && !confirm('Supprimer définitivement toutes les entrées et remettre les compteurs à zéro ?')) return;
   entries = [];
   editingIndex = null;
   auditStats = { secured: 0, unsecuredWithCollaborator: 0 };
+  unsecuredEntries = [];
+  otherComments = [];
   resetEntryForm();
   document.getElementById('fieldRoom').value = '';
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
+  localStorage.removeItem(UNSECURED_ENTRIES_STORAGE_KEY);
+  localStorage.removeItem(OTHER_COMMENTS_STORAGE_KEY);
   renderAuditCounters();
   renderTable();
 });
 
 function buildExportWorkbook() {
-  const rows = entries.map((e) => ({
-    Date: e.date,
-    Heure: e.heure,
-    'N° Asset': e.asset,
-    'Nom de la personne connectée': e.nom,
-    'Bureau / Salle': e.bureau,
-    Commentaire: e.commentaire,
-  }));
-  rows.push({
-    Date: 'Bilan de l’audit',
-    Heure: '',
-    'N° Asset': '',
-    'Nom de la personne connectée': '',
-    'Bureau / Salle': '',
-    Commentaire: `PCs sécurisés : ${auditStats.secured} | PCs non sécurisés avec collaborateur devant le PC : ${auditStats.unsecuredWithCollaborator}`,
+  const exportRow = (type, values = {}) => ({
+    Type: type,
+    Date: values.date || '',
+    Heure: values.heure || '',
+    'N° Asset': values.asset || '',
+    'Nom de la personne connectée': values.nom || '',
+    'Bureau / Salle': values.bureau || '',
+    Commentaire: values.commentaire || '',
+    Nombre: values.nombre ?? '',
   });
+  const rows = [
+    exportRow('Compteur', {
+      date: 'Bilan de l’audit',
+      commentaire: 'PCs sécurisés',
+      nombre: auditStats.secured,
+    }),
+    exportRow('Compteur', {
+      date: 'Bilan de l’audit',
+      commentaire: 'PCs non sécurisés avec collaborateur devant le PC',
+      nombre: auditStats.unsecuredWithCollaborator,
+    }),
+    ...entries.map((e) => exportRow('PC non attaché', e)),
+    ...unsecuredEntries.map((e) => exportRow('PC non sécurisé', e)),
+    ...otherComments.map((e) => exportRow('Autre', e)),
+  ];
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 }, { wch: 78 }];
+  ws['!cols'] = [{ wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 }, { wch: 72 }, { wch: 10 }];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'PC non attachés');
+  XLSX.utils.book_append_sheet(wb, ws, 'Audit');
   return wb;
 }
 
@@ -1122,7 +1269,8 @@ function downloadExportFile(file) {
 }
 
 function ensureEntriesForExport() {
-  if (!entries.length && !auditStats.secured && !auditStats.unsecuredWithCollaborator) {
+  if (!entries.length && !auditStats.secured && !auditStats.unsecuredWithCollaborator
+    && !unsecuredEntries.length && !otherComments.length) {
     alert('La liste et les compteurs sont vides.');
     return false;
   }

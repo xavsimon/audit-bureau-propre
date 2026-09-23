@@ -20,6 +20,7 @@ body {
 }
 
 body.capture-active { overflow: hidden; }
+body.modal-open { overflow: hidden; }
 
 body.scan-success-flash::after {
   content: '';
@@ -131,6 +132,13 @@ main {
   color: #fff;
   font-size: 2.4rem;
   line-height: 1;
+}
+.btn-counter-add {
+  flex: 0 0 auto;
+  min-width: 120px;
+  height: 68px;
+  background: var(--secondary);
+  color: #fff;
 }
 .counter-controls {
   display: flex;
@@ -373,6 +381,59 @@ main {
 
 .camera-controls .btn:only-child { flex: 0 1 240px; margin: 0 auto; }
 
+.audit-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 850;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(17, 24, 39, 0.72);
+}
+
+.audit-modal[hidden] { display: none; }
+
+.audit-modal-content {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 18px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+.audit-modal-content h2 { margin-bottom: 14px; }
+
+.modal-scan-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.modal-scan-row .btn { flex: 1; margin-bottom: 0; }
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.modal-actions .btn { min-width: 110px; }
+
 .photo-preview summary {
   color: var(--primary-dark);
   cursor: pointer;
@@ -472,4 +533,9 @@ th:last-child, td:last-child { white-space: nowrap; }
   color: #666;
   text-align: center;
   padding: 0 10px;
+}
+
+@media (max-width: 480px) {
+  .modal-scan-row { flex-direction: column; }
+  .modal-actions .btn { flex: 1; }
 }
