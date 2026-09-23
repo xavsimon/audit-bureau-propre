@@ -543,7 +543,7 @@ function extractName(text) {
 function getLiveConfig(state) {
   if (state === assetState) {
     return {
-      fieldId: 'fieldAsset',
+      fieldId: 'unsecuredAsset',
       progressId: 'progressAsset',
       resultId: 'scanResultAsset',
       resultValueId: 'scanResultValueAsset',
@@ -554,7 +554,7 @@ function getLiveConfig(state) {
     };
   }
   return {
-    fieldId: 'fieldName',
+    fieldId: 'unsecuredName',
     progressId: 'progressName',
     resultId: 'scanResultName',
     resultValueId: 'scanResultValueName',
@@ -708,13 +708,6 @@ function flashLiveFailure(state) {
   flashScanFailure();
 }
 
-function syncUnsecuredModalField(fieldId) {
-  const modal = document.getElementById('unsecuredModal');
-  if (modal.hidden) return;
-  const targetId = fieldId === 'fieldAsset' ? 'unsecuredAsset' : 'unsecuredName';
-  document.getElementById(targetId).value = document.getElementById(fieldId).value;
-}
-
 function clearLiveResult(state, config) {
   state.analysisGeneration += 1;
   document.getElementById(config.resultId).hidden = true;
@@ -800,7 +793,6 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     const value = config.extract(text);
     if (value) {
       document.getElementById(config.fieldId).value = value;
-      syncUnsecuredModalField(config.fieldId);
       if (liveCapture) {
         resetScanProgress(state, config);
         state.liveResultValue.textContent = value;
@@ -970,8 +962,6 @@ let entries = loadEntries();
 let auditStats = loadAuditStats();
 let unsecuredEntries = loadStoredList(UNSECURED_ENTRIES_STORAGE_KEY);
 let otherComments = loadStoredList(OTHER_COMMENTS_STORAGE_KEY);
-let editingIndex = null;
-let modalCaptureBackup = null;
 
 function renderAuditCounters() {
   document.getElementById('securedCount').textContent = auditStats.secured;
@@ -1003,23 +993,10 @@ function closeAuditModal(id) {
 }
 
 function prepareModalCapture(state) {
-  if (!modalCaptureBackup) {
-    modalCaptureBackup = {
-      asset: document.getElementById('fieldAsset').value,
-      name: document.getElementById('fieldName').value,
-    };
-  }
   const config = getLiveConfig(state);
   clearLiveResult(state, config);
   document.getElementById(config.fieldId).value = '';
   state.liveBtn.click();
-}
-
-function restoreModalCaptureFields() {
-  if (!modalCaptureBackup) return;
-  document.getElementById('fieldAsset').value = modalCaptureBackup.asset;
-  document.getElementById('fieldName').value = modalCaptureBackup.name;
-  modalCaptureBackup = null;
 }
 
 function resetUnsecuredModal() {
@@ -1028,15 +1005,8 @@ function resetUnsecuredModal() {
   document.getElementById('unsecuredComment').value = '';
 }
 
-document.getElementById('fieldAsset').addEventListener('input', () => syncUnsecuredModalField('fieldAsset'));
-document.getElementById('fieldName').addEventListener('input', () => syncUnsecuredModalField('fieldName'));
-
 document.getElementById('addUnsecuredFree').addEventListener('click', () => {
   resetUnsecuredModal();
-  modalCaptureBackup = {
-    asset: document.getElementById('fieldAsset').value,
-    name: document.getElementById('fieldName').value,
-  };
   openAuditModal('unsecuredModal');
 });
 
@@ -1044,7 +1014,6 @@ document.getElementById('scanUnsecuredAsset').addEventListener('click', () => pr
 document.getElementById('scanUnsecuredName').addEventListener('click', () => prepareModalCapture(nameState));
 document.getElementById('cancelUnsecured').addEventListener('click', () => {
   closeAuditModal('unsecuredModal');
-  restoreModalCaptureFields();
   resetUnsecuredModal();
 });
 document.getElementById('confirmUnsecured').addEventListener('click', () => {
@@ -1065,8 +1034,8 @@ document.getElementById('confirmUnsecured').addEventListener('click', () => {
   });
   saveStoredList(UNSECURED_ENTRIES_STORAGE_KEY, unsecuredEntries);
   renderAuditCounters();
+  renderTable();
   closeAuditModal('unsecuredModal');
-  restoreModalCaptureFields();
   resetUnsecuredModal();
 });
 
@@ -1100,23 +1069,18 @@ document.getElementById('confirmOther').addEventListener('click', () => {
 function renderTable() {
   const tbody = document.querySelector('#entryTable tbody');
   tbody.innerHTML = '';
-  entries.forEach((entry, idx) => {
+  unsecuredEntries.forEach((entry) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${entry.date}</td>
       <td>${entry.heure}</td>
       <td>${escapeHtml(entry.asset)}</td>
       <td>${escapeHtml(entry.nom)}</td>
-      <td>${escapeHtml(entry.bureau)}</td>
       <td>${escapeHtml(entry.commentaire)}</td>
-      <td>
-        <button class="row-edit" data-idx="${idx}" title="Modifier cette ligne" aria-label="Modifier cette ligne">✎ Modifier</button>
-        <button class="row-del" data-idx="${idx}" title="Supprimer" aria-label="Supprimer">✕</button>
-      </td>
     `;
     tbody.appendChild(tr);
   });
-  document.getElementById('entryCount').textContent = entries.length;
+  document.getElementById('entryCount').textContent = unsecuredEntries.length;
 }
 
 function escapeHtml(s) {
@@ -1125,90 +1089,14 @@ function escapeHtml(s) {
   }[c]));
 }
 
-document.querySelector('#entryTable tbody').addEventListener('click', (e) => {
-  const editBtn = e.target.closest('.row-edit');
-  if (editBtn) {
-    const idx = Number(editBtn.dataset.idx);
-    const entry = entries[idx];
-    if (!entry) return;
-    editingIndex = idx;
-    document.getElementById('fieldAsset').value = entry.asset;
-    document.getElementById('fieldName').value = entry.nom;
-    document.getElementById('fieldRoom').value = entry.bureau;
-    document.getElementById('fieldComment').value = entry.commentaire;
-    document.getElementById('addEntry').textContent = '💾 Enregistrer la modification';
-    document.getElementById('cancelEdit').hidden = false;
-    document.getElementById('step-extra').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    document.getElementById('fieldAsset').focus();
-    return;
-  }
-  const btn = e.target.closest('.row-del');
-  if (!btn) return;
-  const idx = Number(btn.dataset.idx);
-  entries.splice(idx, 1);
-  if (idx === editingIndex) resetEntryForm();
-  else if (editingIndex !== null && idx < editingIndex) editingIndex -= 1;
-  saveEntries(entries);
-  renderTable();
-});
-
-function resetEntryForm() {
-  editingIndex = null;
-  document.getElementById('fieldAsset').value = '';
-  document.getElementById('fieldName').value = '';
-  clearLiveResult(assetState, getLiveConfig(assetState));
-  clearLiveResult(nameState, getLiveConfig(nameState));
-  document.getElementById('fieldComment').value = '';
-  document.getElementById('addEntry').textContent = '➕ Ajouter à la liste';
-  document.getElementById('cancelEdit').hidden = true;
-}
-
-document.getElementById('addEntry').addEventListener('click', () => {
-  const asset = document.getElementById('fieldAsset').value.trim();
-  const nom = document.getElementById('fieldName').value.trim();
-  const bureau = document.getElementById('fieldRoom').value.trim();
-  const commentaire = document.getElementById('fieldComment').value.trim();
-
-  const addingEntry = editingIndex === null;
-  if (addingEntry) {
-    const now = new Date();
-    entries.push({
-      date: now.toLocaleDateString('fr-FR'),
-      heure: now.toLocaleTimeString('fr-FR'),
-      asset,
-      nom,
-      bureau,
-      commentaire,
-    });
-  } else {
-    entries[editingIndex] = {
-      ...entries[editingIndex],
-      asset,
-      nom,
-      bureau,
-      commentaire,
-    };
-  }
-  saveEntries(entries);
-  renderTable();
-
-  // Réinitialise les champs de saisie pour la prochaine machine (garde le bureau).
-  resetEntryForm();
-});
-
-document.getElementById('cancelEdit').addEventListener('click', resetEntryForm);
-
 document.getElementById('clearAll').addEventListener('click', () => {
   const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator
     || unsecuredEntries.length || otherComments.length;
   if (hasAuditData && !confirm('Supprimer définitivement toutes les entrées et remettre les compteurs à zéro ?')) return;
   entries = [];
-  editingIndex = null;
   auditStats = { secured: 0, unsecuredWithCollaborator: 0 };
   unsecuredEntries = [];
   otherComments = [];
-  resetEntryForm();
-  document.getElementById('fieldRoom').value = '';
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
   localStorage.removeItem(UNSECURED_ENTRIES_STORAGE_KEY);

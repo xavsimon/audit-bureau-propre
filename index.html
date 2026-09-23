@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.19.0</span>
+  <span class="version-badge">Version 1.20.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -19,8 +19,8 @@
     <h2 id="secured-pcs-title">PCs sécurisés</h2>
     <div class="counter-controls">
       <output class="counter-value" id="securedCount" aria-live="polite">0</output>
-      <button class="btn btn-counter" id="incrementSecured" type="button" aria-label="Ajouter un PC sécurisé">+</button>
       <button class="btn btn-counter" id="decrementSecured" type="button" aria-label="Retirer un PC sécurisé">−</button>
+      <button class="btn btn-counter" id="incrementSecured" type="button" aria-label="Ajouter un PC sécurisé">+</button>
     </div>
   </section>
 
@@ -28,8 +28,8 @@
     <h2 id="unsecured-pcs-title">PCs non sécurisés avec collaborateur devant le PC</h2>
     <div class="counter-controls">
       <output class="counter-value" id="unsecuredCount" aria-live="polite">0</output>
-      <button class="btn btn-counter" id="incrementUnsecured" type="button" aria-label="Ajouter un PC non sécurisé avec collaborateur devant le PC">+</button>
       <button class="btn btn-counter" id="decrementUnsecured" type="button" aria-label="Retirer un PC non sécurisé avec collaborateur devant le PC">−</button>
+      <button class="btn btn-counter" id="incrementUnsecured" type="button" aria-label="Ajouter un PC non sécurisé avec collaborateur devant le PC">+</button>
     </div>
   </section>
 
@@ -49,124 +49,13 @@
     </div>
   </section>
 
-  <section class="card" id="step-asset">
-    <h2>1. Étiquette d'asset (PC non attaché)</h2>
-    <button class="btn btn-live full-width" id="startLiveAsset" type="button">📹 Démarrer le scanner live</button>
-    <input id="fallbackInputAsset" type="file" accept="image/*" capture="environment" hidden>
-    <div class="ocr-loading" id="ocrLoadingAsset" hidden aria-live="polite">
-      <span class="ocr-spinner" aria-hidden="true"></span>
-      <strong>Initialisation de l'OCR</strong>
-      <span>Veuillez patienter avant de toucher l'écran.</span>
-    </div>
-    <div class="live-scanner" id="liveWrapAsset" hidden>
-      <div class="scan-loading" hidden aria-live="polite">
-        <span class="ocr-spinner" aria-hidden="true"></span>
-        <strong>Préparation du scan</strong>
-        <span class="scan-loading-text">Chargement du moteur OCR...</span>
-        <span>Ne touchez pas encore l'image.</span>
-      </div>
-      <video id="liveVideoAsset" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
-      <div class="scan-frame" aria-hidden="true"></div>
-      <div class="live-status" id="liveStatusAsset" aria-live="polite"></div>
-      <div class="scan-progress" id="scanProgressAsset" hidden aria-live="polite">
-        <div class="scan-progress-label">
-          <span class="scan-progress-text">Analyse en cours</span>
-          <span class="scan-progress-percent">0 %</span>
-        </div>
-        <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
-      </div>
-      <div class="scan-result live-scan-result" hidden role="button" tabindex="0" aria-label="Garder la valeur détectée">
-        <span>Valeur détectée - toucher pour garder</span>
-        <strong></strong>
-      </div>
-      <div class="camera-controls">
-        <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
-      </div>
-    </div>
-    <div class="scan-result" id="scanResultAsset" hidden aria-live="polite">
-      <span>N° Asset détecté</span>
-      <strong id="scanResultValueAsset"></strong>
-    </div>
-    <details class="photo-preview">
-      <summary>Photo capturée</summary>
-      <div class="canvas-wrap" id="wrapAsset">
-        <canvas id="canvasAsset" class="preview"></canvas>
-        <div class="crop-box" id="cropBoxAsset" hidden></div>
-      </div>
-    </details>
-    <div class="progress" id="progressAsset"></div>
-    <label class="field-label">N° Asset (vérifiez / corrigez)</label>
-    <input type="text" id="fieldAsset" placeholder="ex : S165964" autocomplete="off">
-  </section>
-
-  <section class="card" id="step-name">
-    <h2>2. Écran de verrouillage (nom de l'utilisateur)</h2>
-    <button class="btn btn-live full-width" id="startLiveName" type="button">📹 Démarrer le scanner live</button>
-    <input id="fallbackInputName" type="file" accept="image/*" capture="environment" hidden>
-    <div class="ocr-loading" id="ocrLoadingName" hidden aria-live="polite">
-      <span class="ocr-spinner" aria-hidden="true"></span>
-      <strong>Initialisation de l'OCR</strong>
-      <span>Veuillez patienter avant de toucher l'écran.</span>
-    </div>
-    <div class="live-scanner" id="liveWrapName" hidden>
-      <div class="scan-loading" hidden aria-live="polite">
-        <span class="ocr-spinner" aria-hidden="true"></span>
-        <strong>Préparation du scan</strong>
-        <span class="scan-loading-text">Chargement du moteur OCR...</span>
-        <span>Ne touchez pas encore l'image.</span>
-      </div>
-      <video id="liveVideoName" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
-      <div class="scan-frame" aria-hidden="true"></div>
-      <div class="live-status" id="liveStatusName" aria-live="polite"></div>
-      <div class="scan-progress" id="scanProgressName" hidden aria-live="polite">
-        <div class="scan-progress-label">
-          <span class="scan-progress-text">Analyse en cours</span>
-          <span class="scan-progress-percent">0 %</span>
-        </div>
-        <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
-      </div>
-      <div class="scan-result live-scan-result" hidden role="button" tabindex="0" aria-label="Garder la valeur détectée">
-        <span>Valeur détectée - toucher pour garder</span>
-        <strong></strong>
-      </div>
-      <div class="camera-controls">
-        <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>
-      </div>
-    </div>
-    <div class="scan-result" id="scanResultName" hidden aria-live="polite">
-      <span>Nom détecté</span>
-      <strong id="scanResultValueName"></strong>
-    </div>
-    <details class="photo-preview">
-      <summary>Photo capturée</summary>
-      <div class="canvas-wrap" id="wrapName">
-        <canvas id="canvasName" class="preview"></canvas>
-        <div class="crop-box" id="cropBoxName" hidden></div>
-      </div>
-    </details>
-    <div class="progress" id="progressName"></div>
-    <label class="field-label">Nom de la personne connectée (vérifiez / corrigez)</label>
-    <input type="text" id="fieldName" placeholder="ex : SIMON Xavier" autocomplete="off">
-  </section>
-
-  <section class="card" id="step-extra">
-    <h2>3. Informations complémentaires (facultatif)</h2>
-    <label class="field-label">Bureau / Salle</label>
-    <input type="text" id="fieldRoom" placeholder="ex : Bat B - 3e étage" autocomplete="off">
-    <label class="field-label">Commentaire</label>
-    <input type="text" id="fieldComment" placeholder="ex : câble antivol absent" autocomplete="off">
-  </section>
-
-  <button class="btn btn-add" id="addEntry">➕ Ajouter à la liste</button>
-  <button class="btn btn-cancel-edit" id="cancelEdit" type="button" hidden>↩ Annuler la modification</button>
-
   <section class="card" id="step-list">
-    <h2>4. Liste des PC non attachés (<span id="entryCount">0</span>)</h2>
+    <h2>Liste des PCs non sécurisés (<span id="entryCount">0</span>)</h2>
     <div class="table-wrap">
       <table id="entryTable">
         <thead>
           <tr>
-            <th>Date</th><th>Heure</th><th>N° Asset</th><th>Nom</th><th>Bureau</th><th>Commentaire</th><th>Actions</th>
+            <th>Date</th><th>Heure</th><th>N° Asset</th><th>Nom</th><th>Commentaire</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -215,6 +104,92 @@
       <button class="btn btn-primary" id="confirmOther" type="button">OK</button>
     </div>
   </div>
+</div>
+
+<div class="capture-support" aria-hidden="true">
+  <button class="support-only" id="startLiveAsset" type="button"></button>
+  <input class="support-only" id="fallbackInputAsset" type="file" accept="image/*" capture="environment">
+  <div class="ocr-loading" id="ocrLoadingAsset" hidden aria-live="polite">
+    <span class="ocr-spinner" aria-hidden="true"></span>
+    <strong>Initialisation de l'OCR</strong>
+    <span>Veuillez patienter avant de toucher l'écran.</span>
+  </div>
+  <div class="live-scanner" id="liveWrapAsset" hidden>
+    <div class="scan-loading" hidden aria-live="polite">
+      <span class="ocr-spinner" aria-hidden="true"></span>
+      <strong>Préparation du scan</strong>
+      <span class="scan-loading-text">Chargement du moteur OCR...</span>
+      <span>Ne touchez pas encore l'image.</span>
+    </div>
+    <video id="liveVideoAsset" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+    <div class="live-status" id="liveStatusAsset" aria-live="polite"></div>
+    <div class="scan-progress" id="scanProgressAsset" hidden aria-live="polite">
+      <div class="scan-progress-label">
+        <span class="scan-progress-text">Analyse en cours</span>
+        <span class="scan-progress-percent">0 %</span>
+      </div>
+      <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
+    </div>
+    <div class="scan-result live-scan-result" hidden role="button" tabindex="0" aria-label="Garder la valeur détectée">
+      <span>Valeur détectée - toucher pour garder</span>
+      <strong></strong>
+    </div>
+    <div class="camera-controls">
+      <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
+    </div>
+  </div>
+  <div class="scan-result support-only" id="scanResultAsset" hidden aria-live="polite">
+    <span>N° Asset détecté</span>
+    <strong id="scanResultValueAsset"></strong>
+  </div>
+  <div class="canvas-wrap support-only" id="wrapAsset">
+    <canvas id="canvasAsset" class="preview"></canvas>
+    <div class="crop-box" id="cropBoxAsset" hidden></div>
+  </div>
+  <div class="progress support-only" id="progressAsset"></div>
+
+  <button class="support-only" id="startLiveName" type="button"></button>
+  <input class="support-only" id="fallbackInputName" type="file" accept="image/*" capture="environment">
+  <div class="ocr-loading" id="ocrLoadingName" hidden aria-live="polite">
+    <span class="ocr-spinner" aria-hidden="true"></span>
+    <strong>Initialisation de l'OCR</strong>
+    <span>Veuillez patienter avant de toucher l'écran.</span>
+  </div>
+  <div class="live-scanner" id="liveWrapName" hidden>
+    <div class="scan-loading" hidden aria-live="polite">
+      <span class="ocr-spinner" aria-hidden="true"></span>
+      <strong>Préparation du scan</strong>
+      <span class="scan-loading-text">Chargement du moteur OCR...</span>
+      <span>Ne touchez pas encore l'image.</span>
+    </div>
+    <video id="liveVideoName" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+    <div class="live-status" id="liveStatusName" aria-live="polite"></div>
+    <div class="scan-progress" id="scanProgressName" hidden aria-live="polite">
+      <div class="scan-progress-label">
+        <span class="scan-progress-text">Analyse en cours</span>
+        <span class="scan-progress-percent">0 %</span>
+      </div>
+      <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
+    </div>
+    <div class="scan-result live-scan-result" hidden role="button" tabindex="0" aria-label="Garder la valeur détectée">
+      <span>Valeur détectée - toucher pour garder</span>
+      <strong></strong>
+    </div>
+    <div class="camera-controls">
+      <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>
+    </div>
+  </div>
+  <div class="scan-result support-only" id="scanResultName" hidden aria-live="polite">
+    <span>Nom détecté</span>
+    <strong id="scanResultValueName"></strong>
+  </div>
+  <div class="canvas-wrap support-only" id="wrapName">
+    <canvas id="canvasName" class="preview"></canvas>
+    <div class="crop-box" id="cropBoxName" hidden></div>
+  </div>
+  <div class="progress support-only" id="progressName"></div>
 </div>
 
 <script src="vendor/tesseract.min.js"></script>

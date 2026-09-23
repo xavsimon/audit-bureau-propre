@@ -140,6 +140,7 @@ main {
   background: var(--secondary);
   color: #fff;
 }
+.support-only { display: none !important; }
 .counter-controls {
   display: flex;
   align-items: center;
@@ -432,7 +433,12 @@ textarea {
   margin-top: 18px;
 }
 
-.modal-actions .btn { min-width: 110px; }
+.modal-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 48px;
+  margin: 0;
+}
 
 .photo-preview summary {
   color: var(--primary-dark);
