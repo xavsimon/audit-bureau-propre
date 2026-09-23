@@ -983,12 +983,16 @@ document.getElementById('decrementUnsecured').addEventListener('click', () => ch
 renderAuditCounters();
 
 function openAuditModal(id) {
-  document.getElementById(id).hidden = false;
+  const modal = document.getElementById(id);
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
 }
 
 function closeAuditModal(id) {
-  document.getElementById(id).hidden = true;
+  const modal = document.getElementById(id);
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
   if (!document.querySelector('.audit-modal:not([hidden])')) document.body.classList.remove('modal-open');
 }
 
@@ -1093,6 +1097,10 @@ document.getElementById('clearAll').addEventListener('click', () => {
   const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator
     || unsecuredEntries.length || otherComments.length;
   if (hasAuditData && !confirm('Supprimer définitivement toutes les entrées et remettre les compteurs à zéro ?')) return;
+  resetAuditData();
+});
+
+function resetAuditData() {
   entries = [];
   auditStats = { secured: 0, unsecuredWithCollaborator: 0 };
   unsecuredEntries = [];
@@ -1101,9 +1109,13 @@ document.getElementById('clearAll').addEventListener('click', () => {
   localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
   localStorage.removeItem(UNSECURED_ENTRIES_STORAGE_KEY);
   localStorage.removeItem(OTHER_COMMENTS_STORAGE_KEY);
+  resetUnsecuredModal();
+  document.getElementById('otherComment').value = '';
+  closeAuditModal('unsecuredModal');
+  closeAuditModal('otherModal');
   renderAuditCounters();
   renderTable();
-});
+}
 
 function buildExportWorkbook() {
   const exportRow = (type, values = {}) => ({

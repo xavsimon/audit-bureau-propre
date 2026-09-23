@@ -9,7 +9,7 @@
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.20.0</span>
+  <span class="version-badge">Version 1.21.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -63,7 +63,7 @@
     </div>
     <div class="export-row">
       <button class="btn btn-share" id="shareOneDrive" type="button">☁️ Exporter le fichier</button>
-      <button class="btn btn-danger" id="clearAll">🗑 Vider la liste</button>
+      <button class="btn btn-danger" id="clearAll" type="button">🗑 Vider la liste</button>
     </div>
   </section>
 
@@ -74,7 +74,7 @@
   </p>
 </main>
 
-<div class="audit-modal" id="unsecuredModal" hidden role="dialog" aria-modal="true" aria-labelledby="unsecured-modal-title">
+<div class="audit-modal" id="unsecuredModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="unsecured-modal-title">
   <div class="audit-modal-content">
     <h2 id="unsecured-modal-title">Ajouter un PC non sécurisé</h2>
     <div class="modal-scan-row">
@@ -94,7 +94,7 @@
   </div>
 </div>
 
-<div class="audit-modal" id="otherModal" hidden role="dialog" aria-modal="true" aria-labelledby="other-modal-title">
+<div class="audit-modal" id="otherModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="other-modal-title">
   <div class="audit-modal-content">
     <h2 id="other-modal-title">Ajouter un commentaire</h2>
     <label class="field-label" for="otherComment">Commentaire</label>
