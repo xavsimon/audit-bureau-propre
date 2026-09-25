@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.29.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.30.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -14,8 +14,8 @@ n'est nécessaire en usage normal.
   fichiers de langue (`lang/`) sont embarqués localement, ils ne sont pas téléchargés depuis un CDN.
 - La liste des PC non attachés est stockée uniquement dans le stockage local du téléphone
   (`localStorage`), jamais transmise.
-- Seul le fichier `.xlsx` que vous générez volontairement avec le bouton "Exporter le fichier" sort de
-  l'application (vous choisissez ensuite quoi en faire : l'envoyer par mail, le stocker, etc.).
+- Seuls les fichiers que vous générez volontairement sortent de l'application: l'Excel d'audit ou le
+  ZIP du test OCR avec les photos originales. Vous choisissez ensuite le canal de partage.
 
 ## Pourquoi il faut "servir" l'application (ne pas juste double-cliquer sur index.html)
 
@@ -102,10 +102,12 @@ Deux façons simples de faire cela, au choix :
 ## Tester la qualité de l'OCR
 
 En bas de l'écran, ouvrez **"Tester la qualité de l'OCR"**, puis choisissez séparément **Batterie
-d'étiquettes** ou **Batterie de lock screens**. Ajoutez plusieurs photos depuis la galerie ou prenez
-une photo à la fois. Pour mesurer la qualité, saisissez la valeur attendue pour chaque image, puis
-lancez la batterie. Chaque photo passe dans le même pipeline OCR que l'utilisation normale; les scans
-ne modifient pas les entrées d'audit.
+d'étiquettes** ou **Batterie de lock screens**. Pour une série portant sur la même valeur attendue,
+saisissez-la une fois puis ouvrez la caméra. Chaque appui sur **"Prendre et tester"** capture une image,
+l'analyse automatiquement avec le même pipeline OCR que l'utilisation normale et ajoute au rapport la
+photo originale et ses diagnostics. La caméra reste ouverte pour enchaîner les prises; **"Fermer la
+caméra"** revient à la batterie, et **"Quitter le mode test"** arrête le test. L'ajout depuis la galerie
+reste disponible; les entrées d'audit ne sont jamais modifiées.
 
 Le bouton de partage produit un fichier ZIP contenant `report.json` et les photos originales, sans
 recompression. Le rapport inclut les valeurs attendues, textes bruts et extraits, correspondances,

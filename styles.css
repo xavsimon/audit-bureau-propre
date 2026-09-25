@@ -505,6 +505,11 @@ textarea {
 .ocr-test-toolbar strong { min-width: 0; }
 .ocr-test-toolbar .btn { flex: 0 0 auto; width: auto; min-height: 40px; padding: 8px 10px; }
 .ocr-test-help { margin: 8px 0 12px; color: #555; font-size: 0.84rem; }
+.ocr-test-batch-label { display: block; margin: 0 0 5px; font-size: 0.84rem; font-weight: 600; }
+#ocrTestBatchExpected { margin-bottom: 10px; }
+.ocr-test-camera { z-index: 1000; }
+.ocr-test-camera .camera-controls .btn { min-width: 0; }
+.ocr-test-camera .live-status { bottom: 76px; }
 .ocr-test-image-list { display: grid; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
 .ocr-test-image-item {
   display: grid;
@@ -527,6 +532,8 @@ textarea {
 .ocr-test-actions { flex-wrap: wrap; }
 .ocr-test-actions #shareOcrTestReport { flex-basis: 100%; }
 .ocr-test-actions .btn:disabled { opacity: 0.45; }
+.ocr-test-exit { display: flex; justify-content: flex-end; margin-top: 10px; }
+.ocr-test-exit .btn { width: auto; min-height: 42px; margin: 0; }
 
 .photo-preview summary {
   color: var(--primary-dark);
@@ -641,7 +648,9 @@ th:last-child, td:last-child { white-space: nowrap; }
   .modal-scan-row { flex-direction: column; }
   .modal-actions .btn { flex: 1; }
   .ocr-test-choices, .ocr-test-add-actions { flex-direction: column; }
+  .ocr-test-camera .camera-controls { gap: 8px; padding-right: 10px; padding-left: 10px; }
   .ocr-test-toolbar { align-items: flex-start; flex-direction: column; }
   .ocr-test-actions { flex-direction: column; }
   .ocr-test-actions .btn, .ocr-test-actions #shareOcrTestReport { width: 100%; flex-basis: auto; }
+  .ocr-test-exit .btn { width: 100%; }
 }

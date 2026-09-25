@@ -1308,7 +1308,7 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
 const OCR_TEST_MAX_IMAGES = 20;
 const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
 const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
-const OCR_TEST_APP_VERSION = '1.29.0';
+const OCR_TEST_APP_VERSION = '1.30.0';
 const OCR_TEST_TESSERACT_VERSION = '5.1.1';
 let ocrTestMode = null;
 let ocrTestItems = [];
@@ -1326,8 +1326,17 @@ const ocrTestShareButton = document.getElementById('shareOcrTestReport');
 const ocrTestConsent = document.getElementById('confirmOcrTestShare');
 const ocrTestFilePicker = document.getElementById('ocrTestFilePicker');
 const ocrTestCameraPicker = document.getElementById('ocrTestCameraPicker');
+const ocrTestBatchExpected = document.getElementById('ocrTestBatchExpected');
+const ocrTestCameraPopup = document.getElementById('ocrTestCameraPopup');
+const ocrTestCameraVideo = document.getElementById('ocrTestCameraVideo');
+const ocrTestCameraStatus = document.getElementById('ocrTestCameraStatus');
+const ocrTestTakePhotoButton = document.getElementById('takeAndTestOcrPhoto');
+const ocrTestStopCameraButton = document.getElementById('stopOcrTestCamera');
+let ocrTestCameraStream = null;
+let ocrTestCameraBusy = false;
 
 function resetOcrTest() {
+  stopOcrTestCamera();
   ocrTestItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
   ocrTestItems = [];
   ocrTestMode = null;
@@ -1341,7 +1350,15 @@ function resetOcrTest() {
   ocrTestConsent.checked = false;
   ocrTestRunButton.disabled = true;
   ocrTestShareButton.disabled = true;
+  ocrTestBatchExpected.value = '';
   document.getElementById('runOcrTest').textContent = 'Lancer la batterie';
+  updateOcrTestButtons();
+}
+
+function exitOcrTestMode() {
+  stopOcrTestCamera();
+  closeAuditModal('ocrTestModal');
+  resetOcrTest();
 }
 
 function openOcrTestMode(mode) {
@@ -1363,19 +1380,21 @@ document.getElementById('startAssetBattery').addEventListener('click', () => ope
 document.getElementById('startNameBattery').addEventListener('click', () => openOcrTestMode('name'));
 document.getElementById('backOcrTestChoices').addEventListener('click', resetOcrTest);
 document.getElementById('cancelOcrTest').addEventListener('click', () => {
-  if (ocrTestRunning) return;
-  closeAuditModal('ocrTestModal');
-  resetOcrTest();
+  if (ocrTestRunning || ocrTestCameraBusy) return;
+  exitOcrTestMode();
 });
 document.getElementById('addOcrTestFiles').addEventListener('click', () => ocrTestFilePicker.click());
-document.getElementById('captureOcrTestPhoto').addEventListener('click', () => ocrTestCameraPicker.click());
+document.getElementById('captureOcrTestPhoto').addEventListener('click', openOcrTestCamera);
+ocrTestStopCameraButton.addEventListener('click', stopOcrTestCamera);
+ocrTestTakePhotoButton.addEventListener('click', captureAndTestOcrPhoto);
 
-function addOcrTestFiles(fileList, source = 'gallery') {
+function addOcrTestFiles(fileList, source = 'gallery', expectedValue = '', preserveExistingResults = false) {
   const files = Array.from(fileList || []);
-  if (!files.length) return;
+  if (!files.length) return [];
   let totalBytes = ocrTestItems.reduce((sum, item) => sum + item.file.size, 0);
   let rejected = 0;
   let added = 0;
+  const addedItems = [];
   for (const file of files) {
     if (!file.type.startsWith('image/') || file.size > OCR_TEST_MAX_FILE_BYTES
       || ocrTestItems.length >= OCR_TEST_MAX_IMAGES || totalBytes + file.size > OCR_TEST_MAX_TOTAL_BYTES) {
@@ -1386,19 +1405,22 @@ function addOcrTestFiles(fileList, source = 'gallery') {
       id: ocrTestNextId++,
       file,
       source,
-      expected: '',
+      expected: expectedValue,
       previewUrl: URL.createObjectURL(file),
       result: null,
     };
     totalBytes += file.size;
     ocrTestItems.push(item);
+    addedItems.push(item);
     added += 1;
   }
-  if (added) invalidateOcrTestResults();
+  if (added && !preserveExistingResults) invalidateOcrTestResults();
   renderOcrTestItems();
+  if (added && preserveExistingResults) renderOcrTestResults();
   if (rejected) {
     ocrTestProgress.textContent = `${rejected} photo(s) ignorée(s). Limites: ${OCR_TEST_MAX_IMAGES} photos, 15 Mio par photo et 100 Mio par batterie.`;
   }
+  return addedItems;
 }
 
 ocrTestFilePicker.addEventListener('change', () => {
@@ -1406,9 +1428,121 @@ ocrTestFilePicker.addEventListener('change', () => {
   ocrTestFilePicker.value = '';
 });
 ocrTestCameraPicker.addEventListener('change', () => {
-  addOcrTestFiles(ocrTestCameraPicker.files, 'camera-capture-picker');
+  const [item] = addOcrTestFiles(
+    ocrTestCameraPicker.files,
+    'camera-capture-picker',
+    ocrTestBatchExpected.value.trim(),
+    true
+  );
   ocrTestCameraPicker.value = '';
+  if (item) analyzeOcrTestItem(item);
 });
+
+async function openOcrTestCamera() {
+  if (!ocrTestBatchExpected.value.trim()) {
+    ocrTestProgress.textContent = 'Saisissez d’abord la valeur attendue pour cette série.';
+    ocrTestBatchExpected.focus();
+    return;
+  }
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    ocrTestProgress.textContent = 'Caméra en direct indisponible dans ce contexte. Ouverture de la caméra photo du navigateur.';
+    ocrTestCameraPicker.click();
+    return;
+  }
+  if (ocrTestCameraStream) return;
+  ocrTestCameraPopup.hidden = false;
+  document.body.classList.add('capture-active');
+  ocrTestCameraStatus.textContent = 'Connexion à la caméra…';
+  ocrTestTakePhotoButton.disabled = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    if (ocrTestCameraPopup.hidden) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    ocrTestCameraStream = stream;
+    ocrTestCameraVideo.srcObject = stream;
+    await ocrTestCameraVideo.play();
+    await enterCaptureFullscreen(ocrTestCameraPopup);
+    ocrTestCameraStatus.textContent = 'Cadrez le texte puis prenez une photo.';
+    ocrTestTakePhotoButton.disabled = false;
+  } catch (error) {
+    stopOcrTestCamera();
+    ocrTestProgress.textContent = error.name === 'NotAllowedError'
+      ? 'L’accès à la caméra a été refusé.'
+      : 'Impossible d’ouvrir la caméra. Vérifiez les autorisations du navigateur.';
+  }
+}
+
+function stopOcrTestCamera() {
+  if (ocrTestCameraStream) {
+    ocrTestCameraStream.getTracks().forEach((track) => track.stop());
+    ocrTestCameraStream = null;
+  }
+  ocrTestCameraVideo.pause();
+  ocrTestCameraVideo.srcObject = null;
+  ocrTestCameraPopup.hidden = true;
+  ocrTestTakePhotoButton.disabled = false;
+  ocrTestStopCameraButton.disabled = false;
+  document.body.classList.remove('capture-active');
+  exitCaptureFullscreen(ocrTestCameraPopup);
+}
+
+async function captureAndTestOcrPhoto() {
+  if (!ocrTestCameraStream || ocrTestCameraBusy) return;
+  const frame = captureVideoFrame(ocrTestCameraVideo);
+  if (!frame) {
+    ocrTestCameraStatus.textContent = 'Mise au point de la caméra…';
+    return;
+  }
+  ocrTestCameraBusy = true;
+  ocrTestTakePhotoButton.disabled = true;
+  ocrTestStopCameraButton.disabled = true;
+  ocrTestCameraStatus.textContent = 'Photo prise. Analyse OCR en cours…';
+  ocrTestCameraPopup.classList.add('capture-photo-flash');
+  window.setTimeout(() => ocrTestCameraPopup.classList.remove('capture-photo-flash'), 300);
+  try {
+    const blob = await new Promise((resolve) => frame.toBlob(resolve, 'image/jpeg', 0.94));
+    if (!blob) throw new Error('Impossible de créer la photo.');
+    const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const [item] = addOcrTestFiles([file], 'live-camera', ocrTestBatchExpected.value.trim(), true);
+    if (!item) throw new Error('Photo refusée: vérifiez les limites de taille et de nombre.');
+    await analyzeOcrTestItem(item);
+    ocrTestCameraStatus.textContent = `Photo ${ocrTestItems.indexOf(item) + 1} enregistrée. Cadrez la suivante.`;
+  } catch (error) {
+    ocrTestCameraStatus.textContent = error?.message || 'Échec de la capture.';
+  } finally {
+    ocrTestCameraBusy = false;
+    ocrTestTakePhotoButton.disabled = false;
+    ocrTestStopCameraButton.disabled = false;
+    updateOcrTestButtons();
+  }
+}
+
+async function analyzeOcrTestItem(item) {
+  if (ocrTestRunning) return;
+  ocrTestRunning = true;
+  renderOcrTestItems();
+  updateOcrTestButtons();
+  try {
+    if (!await prepareOcr(ocrTestMode === 'asset' ? assetState : nameState)) {
+      throw new Error('Le moteur OCR ne peut pas être initialisé.');
+    }
+    await testOcrImage(item, ocrTestItems.indexOf(item), ocrTestItems.length);
+    renderOcrTestResults();
+    const exactCount = ocrTestItems.filter((candidate) => candidate.result?.exactMatch).length;
+    ocrTestProgress.textContent = `Photo testée: ${item.result.exactMatch ? 'valeur exacte' : 'valeur différente'}; ${exactCount}/${ocrTestItems.length} exactes dans la série.`;
+  } catch (error) {
+    ocrTestProgress.textContent = `Test de la photo impossible: ${error?.message || error}`;
+  } finally {
+    ocrTestRunning = false;
+    renderOcrTestItems();
+    updateOcrTestButtons();
+  }
+}
 
 function renderOcrTestItems() {
   ocrTestImageList.replaceChildren();
@@ -1472,6 +1606,12 @@ function updateOcrTestButtons() {
   ocrTestRunButton.disabled = ocrTestRunning || !allExpectedValuesPresent;
   ocrTestShareButton.disabled = ocrTestRunning || !allResultsPresent
     || !ocrTestConsent.checked;
+  document.getElementById('backOcrTestChoices').disabled = ocrTestRunning || ocrTestCameraBusy;
+  document.getElementById('cancelOcrTest').disabled = ocrTestRunning || ocrTestCameraBusy;
+  document.getElementById('addOcrTestFiles').disabled = ocrTestRunning || ocrTestCameraBusy;
+  document.getElementById('captureOcrTestPhoto').disabled = ocrTestRunning || ocrTestCameraBusy;
+  ocrTestTakePhotoButton.disabled = ocrTestRunning || ocrTestCameraBusy || !ocrTestCameraStream;
+  ocrTestStopCameraButton.disabled = ocrTestRunning || ocrTestCameraBusy;
 }
 
 ocrTestConsent.addEventListener('change', updateOcrTestButtons);
