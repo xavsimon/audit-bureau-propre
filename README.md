@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.30.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.30.1 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en

@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.30.0&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.30.1&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.30.0</span>
+  <span class="version-badge">Version 1.30.1</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -117,7 +117,7 @@
       </div>
       <p class="ocr-test-help">Pour une série d'images de la même étiquette ou du même nom, saisissez la valeur attendue une fois, puis prenez chaque photo: elle sera testée et enregistrée automatiquement.</p>
       <label class="ocr-test-batch-label" for="ocrTestBatchExpected">Valeur attendue pour les prochaines photos</label>
-      <input id="ocrTestBatchExpected" type="text" autocomplete="off" placeholder="Ex. S165964 ou SIMON Xavier">
+      <input id="ocrTestBatchExpected" type="text" autocomplete="off" placeholder="Ex. S123456 ou Paul DUGENOU">
       <div class="ocr-test-add-actions">
         <button class="btn btn-live" id="addOcrTestFiles" type="button">Ajouter des photos</button>
         <button class="btn btn-live" id="captureOcrTestPhoto" type="button">Ouvrir la caméra</button>
@@ -159,9 +159,9 @@
       <button class="btn btn-live" id="scanUnsecuredName" type="button">Scanner l'écran de verrouillage</button>
     </div>
     <label class="field-label" for="unsecuredAsset">N° Asset</label>
-    <input type="text" id="unsecuredAsset" placeholder="ex : S165964" autocomplete="off">
+    <input type="text" id="unsecuredAsset" placeholder="ex : S123456" autocomplete="off">
     <label class="field-label" for="unsecuredName">Nom de la personne connectée</label>
-    <input type="text" id="unsecuredName" placeholder="ex : SIMON Xavier" autocomplete="off">
+    <input type="text" id="unsecuredName" placeholder="ex : Paul DUGENOU" autocomplete="off">
     <label class="field-label" for="unsecuredComment">Commentaire</label>
     <textarea id="unsecuredComment" rows="4" placeholder="ex : câble antivol absent"></textarea>
     <div class="modal-actions">
@@ -269,8 +269,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.30.0"></script>
-<script src="vendor/xlsx.full.min.js?v=1.30.0"></script>
-<script src="app.js?v=1.30.0"></script>
+<script src="vendor/tesseract.min.js?v=1.30.1"></script>
+<script src="vendor/xlsx.full.min.js?v=1.30.1"></script>
+<script src="app.js?v=1.30.1"></script>
 </body>
 </html>

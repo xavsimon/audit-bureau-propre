@@ -47,7 +47,7 @@ Les tailles indiquées sont des tailles de fichiers du workspace (Mio, arrondies
 
 ## 2. Structure connue et ROI
 
-Les attentes de formulaire donnent déjà un signal exploitable: le numéro ressemble à `S165964` et est associé au libellé « Asset »; le nom est recherché sur un écran de verrouillage. Aujourd'hui le logiciel ne connaît toutefois ni géométrie fixe, ni dimensions de l'étiquette, ni coordonnées stables de ses champs. Il ne détecte pas le contour de l'étiquette, ne corrige pas la perspective et n'a pas de lecteur code-barres/QR.
+Les attentes de formulaire donnent déjà un signal exploitable: un identifiant de type `S123456` est associé au libellé « Asset »; un nom est recherché sur un écran de verrouillage. Aujourd'hui le logiciel ne connaît toutefois ni géométrie fixe, ni dimensions de l'étiquette, ni coordonnées stables de ses champs. Il ne détecte pas le contour de l'étiquette, ne corrige pas la perspective et n'a pas de lecteur code-barres/QR.
 
 La stratégie existante est déjà une première approche ROI: PSM 11 trouve des lignes dans la photo entière, une heuristique sélectionne une ligne, puis le rectangle de cette ligne est recadré et relu en PSM 6. Ce n'est pas encore une segmentation métier robuste: la ligne peut être un faux positif, la bbox est légèrement élargie, et la relecture n'applique pas de whitelist propre au champ.
 

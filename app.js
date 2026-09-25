@@ -579,7 +579,7 @@ function extractName(text) {
   lines.sort((a, b) => scoreNameLine(b) - scoreNameLine(a));
   // Ne garde que la suite de "mots de nom" en tête de ligne (Capitalisé ou
   // TOUT EN MAJUSCULES) ; s'arrête au premier résidu OCR (ponctuation, lettre
-  // isolée...) du type "SIMON Xavier - à".
+  // isolée...) du type "Paul DUGENOU - à".
   const wordRe = /^[A-ZÀ-Ý]([a-zà-ÿ]+|[A-ZÀ-Ý]*)$/;
   const kept = [];
   for (const tok of lines[0].split(/\s+/)) {
@@ -1308,7 +1308,7 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
 const OCR_TEST_MAX_IMAGES = 20;
 const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
 const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
-const OCR_TEST_APP_VERSION = '1.30.0';
+const OCR_TEST_APP_VERSION = '1.30.1';
 const OCR_TEST_TESSERACT_VERSION = '5.1.1';
 let ocrTestMode = null;
 let ocrTestItems = [];
@@ -1563,7 +1563,7 @@ function renderOcrTestItems() {
     input.id = `ocrTestExpected${item.id}`;
     input.type = 'text';
     input.autocomplete = 'off';
-    input.placeholder = ocrTestMode === 'asset' ? 'Valeur attendue, ex. S165964' : 'Nom attendu, ex. SIMON Xavier';
+    input.placeholder = ocrTestMode === 'asset' ? 'Valeur attendue, ex. S123456' : 'Nom attendu, ex. Paul DUGENOU';
     input.value = item.expected;
     input.disabled = ocrTestRunning;
     input.addEventListener('input', () => {
