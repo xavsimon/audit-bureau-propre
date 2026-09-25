@@ -1308,7 +1308,7 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
 const OCR_TEST_MAX_IMAGES = 20;
 const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
 const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
-const OCR_TEST_APP_VERSION = '1.31.0';
+const OCR_TEST_APP_VERSION = '1.31.1';
 const OCR_TEST_TESSERACT_VERSION = '5.1.1';
 let ocrTestMode = null;
 let ocrTestItems = [];
@@ -1893,8 +1893,11 @@ async function createOcrTestReportFile() {
     });
   });
   const zip = await createOcrTestZip(entries);
-  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-  return new File([zip], `ocr_benchmark_${ocrTestMode}_${stamp}.zip`, { type: 'application/zip' });
+  const now = new Date();
+  const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+  const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map((part) => String(part).padStart(2, '0')).join('-');
+  const category = ocrTestMode === 'asset' ? 'etiquettes' : 'lock-screens';
+  return new File([zip], `rapport_ocr_${category}_${date}_${time}.zip`, { type: 'application/zip' });
 }
 
 function downloadOcrTestReport(file) {

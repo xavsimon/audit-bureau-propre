@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.31.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.31.1 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -108,7 +108,8 @@ revient à la batterie. Cliquez ensuite sur **"Lancer la batterie"** pour analys
 le même pipeline OCR que l'utilisation normale, puis sur **"Partager le rapport avec les photos"**. Le
 bouton **"Quitter le mode test"** arrête le test; les entrées d'audit ne sont jamais modifiées.
 
-Le bouton de partage produit un fichier ZIP contenant `report.json` et les photos originales, sans
+Le bouton de partage produit un fichier ZIP nommé `rapport_ocr_<catégorie>_<AAAA-MM-JJ>_<HH-MM-SS>.zip`
+(horodatage local du téléphone), contenant `report.json` et les photos originales, sans
 recompression. Le rapport inclut les valeurs attendues, textes bruts et extraits, correspondances,
 CER, confiances Tesseract, temps, lignes détectées par orientation, coordonnées des zones, dimensions
 décodées, version/configuration OCR et informations navigateur/appareil disponibles. Les noms de
