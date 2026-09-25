@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.30.1&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.31.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.30.1</span>
+  <span class="version-badge">Version 1.31.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -111,26 +111,18 @@
       <button class="btn btn-live" id="startNameBattery" type="button">Batterie de lock screens</button>
     </div>
     <div id="ocrTestWorkspace" hidden>
-      <div class="ocr-test-toolbar">
-        <strong id="ocrTestModeLabel"></strong>
-        <button class="btn btn-secondary" id="backOcrTestChoices" type="button">Changer de test</button>
-      </div>
-      <p class="ocr-test-help">Pour une série d'images de la même étiquette ou du même nom, saisissez la valeur attendue une fois, puis prenez chaque photo: elle sera testée et enregistrée automatiquement.</p>
+      <h3 class="ocr-test-mode-label" id="ocrTestModeLabel"></h3>
       <label class="ocr-test-batch-label" for="ocrTestBatchExpected">Valeur attendue pour les prochaines photos</label>
       <input id="ocrTestBatchExpected" type="text" autocomplete="off" placeholder="Ex. S123456 ou Paul DUGENOU">
-      <div class="ocr-test-add-actions">
-        <button class="btn btn-live" id="addOcrTestFiles" type="button">Ajouter des photos</button>
-        <button class="btn btn-live" id="captureOcrTestPhoto" type="button">Ouvrir la caméra</button>
-      </div>
-      <input id="ocrTestFilePicker" type="file" accept="image/*" multiple hidden>
+      <button class="btn btn-live ocr-test-add-photos" id="addOcrTestPhotos" type="button">Ajouter des photos</button>
       <input id="ocrTestCameraPicker" type="file" accept="image/*" capture="environment" hidden>
       <div class="live-scanner ocr-test-camera" id="ocrTestCameraPopup" hidden>
         <video id="ocrTestCameraVideo" class="live-video" playsinline muted aria-label="Aperçu de la caméra"></video>
         <div class="scan-frame" aria-hidden="true"></div>
         <div class="live-status" id="ocrTestCameraStatus" aria-live="polite">Cadrez le texte puis prenez une photo.</div>
         <div class="camera-controls">
-          <button class="btn btn-primary" id="takeAndTestOcrPhoto" type="button">Prendre et tester</button>
-          <button class="btn btn-stop-live" id="stopOcrTestCamera" type="button">Fermer la caméra</button>
+          <button class="btn btn-primary" id="takeOcrTestPhoto" type="button">Prendre une photo</button>
+          <button class="btn btn-stop-live" id="stopOcrTestCamera" type="button">Terminer les photos</button>
         </div>
       </div>
       <ul id="ocrTestImageList" class="ocr-test-image-list" aria-live="polite"></ul>
@@ -144,9 +136,9 @@
         <button class="btn btn-primary" id="runOcrTest" type="button" disabled>Lancer la batterie</button>
         <button class="btn btn-share" id="shareOcrTestReport" type="button" disabled>Partager le rapport avec les photos</button>
       </div>
-    </div>
-    <div class="ocr-test-exit">
-      <button class="btn btn-secondary" id="cancelOcrTest" type="button">Quitter le mode test</button>
+      <div class="ocr-test-exit">
+        <button class="btn btn-secondary" id="cancelOcrTest" type="button">Quitter le mode test</button>
+      </div>
     </div>
   </div>
 </div>
@@ -269,8 +261,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.30.1"></script>
-<script src="vendor/xlsx.full.min.js?v=1.30.1"></script>
-<script src="app.js?v=1.30.1"></script>
+<script src="vendor/tesseract.min.js?v=1.31.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.31.0"></script>
+<script src="app.js?v=1.31.0"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.30.1 (OCR + export Excel)
+# Audit Bureau Propre — version 1.31.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -102,12 +102,11 @@ Deux façons simples de faire cela, au choix :
 ## Tester la qualité de l'OCR
 
 En bas de l'écran, ouvrez **"Tester la qualité de l'OCR"**, puis choisissez séparément **Batterie
-d'étiquettes** ou **Batterie de lock screens**. Pour une série portant sur la même valeur attendue,
-saisissez-la une fois puis ouvrez la caméra. Chaque appui sur **"Prendre et tester"** capture une image,
-l'analyse automatiquement avec le même pipeline OCR que l'utilisation normale et ajoute au rapport la
-photo originale et ses diagnostics. La caméra reste ouverte pour enchaîner les prises; **"Fermer la
-caméra"** revient à la batterie, et **"Quitter le mode test"** arrête le test. L'ajout depuis la galerie
-reste disponible; les entrées d'audit ne sont jamais modifiées.
+d'étiquettes** ou **Batterie de lock screens**. Saisissez la valeur attendue, cliquez sur **"Ajouter des
+photos"** puis prenez autant de photos que nécessaire dans la fenêtre caméra. **"Terminer les photos"**
+revient à la batterie. Cliquez ensuite sur **"Lancer la batterie"** pour analyser toutes les images dans
+le même pipeline OCR que l'utilisation normale, puis sur **"Partager le rapport avec les photos"**. Le
+bouton **"Quitter le mode test"** arrête le test; les entrées d'audit ne sont jamais modifiées.
 
 Le bouton de partage produit un fichier ZIP contenant `report.json` et les photos originales, sans
 recompression. Le rapport inclut les valeurs attendues, textes bruts et extraits, correspondances,
