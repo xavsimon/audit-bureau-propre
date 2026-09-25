@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.17.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.29.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -83,10 +83,11 @@ Deux façons simples de faire cela, au choix :
   pour le garder et fermer le scanner, ou touchez l'image pour refaire le scan.
 
   Le moteur OCR est préchargé en arrière-plan après l'ouverture de la fenêtre principale afin de
-  réduire l'attente au démarrage du premier scan.
-
-  Pour les écrans clairs, le scan du nom effectue automatiquement une seconde lecture avec un
-  contraste local et un seuillage adaptatif si la première lecture ne fournit aucun nom exploitable.
+  réduire l'attente au démarrage du premier scan. La reconnaissance applique un passage standard
+  (niveaux de gris et étirement global du contraste), recherche les lignes en mode texte épars,
+  puis relit la ligne retenue en mode bloc unique. Le numéro d'asset est recherché dans trois
+  orientations (90°, 0°, 270°); le nom est recherché à 0° uniquement. Aucun second passage avec
+  seuillage adaptatif n'est exécuté actuellement.
 4. Complétez éventuellement le numéro d'asset, le nom, le bureau/la salle et un commentaire.
 5. Cliquez sur **"Ajouter à la liste"**.
 6. Répétez pour chaque PC non attaché trouvé.
@@ -98,15 +99,39 @@ Deux façons simples de faire cela, au choix :
 9. Le bouton "Vider la liste" efface définitivement les entrées et toutes les informations du PC
   stockées sur l'appareil (à utiliser une fois l'export récupéré).
 
+## Tester la qualité de l'OCR
+
+En bas de l'écran, ouvrez **"Tester la qualité de l'OCR"**, puis choisissez séparément **Batterie
+d'étiquettes** ou **Batterie de lock screens**. Ajoutez plusieurs photos depuis la galerie ou prenez
+une photo à la fois. Pour mesurer la qualité, saisissez la valeur attendue pour chaque image, puis
+lancez la batterie. Chaque photo passe dans le même pipeline OCR que l'utilisation normale; les scans
+ne modifient pas les entrées d'audit.
+
+Le bouton de partage produit un fichier ZIP contenant `report.json` et les photos originales, sans
+recompression. Le rapport inclut les valeurs attendues, textes bruts et extraits, correspondances,
+CER, confiances Tesseract, temps, lignes détectées par orientation, coordonnées des zones, dimensions
+décodées, version/configuration OCR et informations navigateur/appareil disponibles. Les noms de
+fichiers d'origine sont remplacés par des identifiants d'échantillon. Les ZIP ne sont pas compressés
+au-delà des photos déjà compressées et peuvent donc être volumineux.
+
+Le rapport et les photos restent en mémoire locale jusqu'à ce que vous choisissiez explicitement le
+partage natif ou le téléchargement. La case de confirmation est obligatoire. Les photos originales
+peuvent contenir des noms, du contenu d'écran ou des métadonnées EXIF, y compris une localisation:
+vérifiez les images et choisissez un canal autorisé avant l'envoi. Aucun rapport n'est envoyé à
+l'application ou automatiquement sur Internet. Si le partage natif n'est pas disponible, le ZIP est
+téléchargé pour être partagé manuellement. Limites par batterie: 20 photos, 15 Mio par photo et
+100 Mio au total.
+
 ## Structure du dossier
 
 ```
 index.html        page principale
 styles.css        mise en forme
-app.js            logique de l'application (OCR, extraction, liste, export)
+app.js            logique de l'application (OCR, extraction, liste, export et benchmark)
 server.js         petit serveur local sans dépendance (voir Option A)
 vendor/           Tesseract.js + moteur OCR (WASM) + SheetJS, en local
 lang/             données de langue Tesseract (eng + fra), en local
+OCR_AUDIT.md      audit initial et protocole d'évaluation OCR
 ```
 
 ## Limites connues

@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.28.0&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.29.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.28.0</span>
+  <span class="version-badge">Version 1.29.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -91,10 +91,52 @@
 
   <p class="privacy-note">
     Toutes les photos et le texte OCR restent uniquement dans la mémoire de votre téléphone
-    (traitement local via WebAssembly, aucun appel réseau). Seul le fichier Excel que vous exportez
-    volontairement quitte l'application.
+    (traitement local via WebAssembly, aucun appel externe). Seuls les fichiers que vous partagez
+    volontairement quittent l'application: l'Excel d'audit ou le ZIP de test OCR, qui contient les
+    photos originales et peut inclure des données personnelles ou EXIF.
   </p>
 </main>
+
+<section class="ocr-test-launch" aria-labelledby="ocr-test-heading">
+  <h2 id="ocr-test-heading">Amélioration de la reconnaissance</h2>
+  <button class="btn btn-primary" id="openOcrTest" type="button">Tester la qualité de l'OCR</button>
+</section>
+
+<div class="audit-modal" id="ocrTestModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ocr-test-title">
+  <div class="audit-modal-content ocr-test-content">
+    <h2 id="ocr-test-title">Tester la qualité de l'OCR</h2>
+    <p class="ocr-test-warning">Les rapports de batterie contiennent les valeurs attendues et reconnues. Les photos d'écran peuvent montrer des noms ou d'autres données personnelles; les originaux peuvent aussi contenir des métadonnées de localisation. Rien n'est envoyé automatiquement.</p>
+    <div id="ocrTestChoices" class="ocr-test-choices">
+      <button class="btn btn-live" id="startAssetBattery" type="button">Batterie d'étiquettes</button>
+      <button class="btn btn-live" id="startNameBattery" type="button">Batterie de lock screens</button>
+    </div>
+    <div id="ocrTestWorkspace" hidden>
+      <div class="ocr-test-toolbar">
+        <strong id="ocrTestModeLabel"></strong>
+        <button class="btn btn-secondary" id="backOcrTestChoices" type="button">Changer de test</button>
+      </div>
+      <p class="ocr-test-help">Ajoutez plusieurs photos de la même catégorie. Pour chaque photo, indiquez exactement la valeur qui devrait être lue.</p>
+      <div class="ocr-test-add-actions">
+        <button class="btn btn-live" id="addOcrTestFiles" type="button">Ajouter des photos</button>
+        <button class="btn btn-live" id="captureOcrTestPhoto" type="button">Prendre une photo</button>
+      </div>
+      <input id="ocrTestFilePicker" type="file" accept="image/*" multiple hidden>
+      <input id="ocrTestCameraPicker" type="file" accept="image/*" capture="environment" hidden>
+      <ul id="ocrTestImageList" class="ocr-test-image-list" aria-live="polite"></ul>
+      <div id="ocrTestProgress" class="ocr-test-progress" role="status" aria-live="polite"></div>
+      <div id="ocrTestResults" class="ocr-test-results" hidden></div>
+      <label class="ocr-test-consent">
+        <input id="confirmOcrTestShare" type="checkbox">
+        <span>Je confirme que je peux partager ces photos et valeurs sensibles par le canal choisi.</span>
+      </label>
+      <div class="modal-actions ocr-test-actions">
+        <button class="btn btn-secondary" id="cancelOcrTest" type="button">Fermer</button>
+        <button class="btn btn-primary" id="runOcrTest" type="button" disabled>Lancer la batterie</button>
+        <button class="btn btn-share" id="shareOcrTestReport" type="button" disabled>Partager le rapport avec les photos</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="audit-modal" id="unsecuredModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="unsecured-modal-title">
   <div class="audit-modal-content">
@@ -214,8 +256,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.28.0"></script>
-<script src="vendor/xlsx.full.min.js?v=1.28.0"></script>
-<script src="app.js?v=1.28.0"></script>
+<script src="vendor/tesseract.min.js?v=1.29.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.29.0"></script>
+<script src="app.js?v=1.29.0"></script>
 </body>
 </html>

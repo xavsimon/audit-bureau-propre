@@ -412,7 +412,8 @@ async function autoRecognize(
   isCurrent,
   preprocess = 'standard',
   progressFloor = 0,
-  reportNoMatch = true
+  reportNoMatch = true,
+  diagnostics = null
 ) {
   const reportProgress = (percent, message) => {
     const adjustedPercent = progressFloor
@@ -438,15 +439,39 @@ async function autoRecognize(
     reportProgress(percent, message);
     state.rotation = rotation;
     state.crop = null;
+    const preprocessingStartedAt = performance.now();
     const canvas = buildOcrCanvas(state, preprocess);
+    const preprocessingMs = Math.round(performance.now() - preprocessingStartedAt);
+    const recognitionStartedAt = performance.now();
     // eslint-disable-next-line no-await-in-loop
     const { data } = await worker.recognize(canvas, {}, { blocks: true });
+    const recognitionMs = Math.round(performance.now() - recognitionStartedAt);
     if (!isCurrent()) return '';
-    const { line, score } = scoreFn(flattenLines(data));
+    const lines = flattenLines(data);
+    const { line, score } = scoreFn(lines);
+    if (diagnostics) {
+      diagnostics.rotations.push({
+        rotation,
+        imageWidth: canvas.width,
+        imageHeight: canvas.height,
+        preprocessingMs,
+        recognitionMs,
+        lines: lines.map((item) => ({
+          text: item.text,
+          confidence: item.confidence,
+          bbox: item.bbox,
+        })),
+        selectedText: line?.text || '',
+        selectedConfidence: line?.confidence ?? null,
+        selectionScore: Number.isFinite(score) ? score : null,
+      });
+    }
     if (line && score > (best ? best.score : -Infinity)) {
       best = {
         rotation,
         score,
+        lineText: line.text,
+        lineConfidence: line.confidence,
         crop: {
           x: line.bbox.x0 / canvas.width,
           y: line.bbox.y0 / canvas.height,
@@ -458,11 +483,21 @@ async function autoRecognize(
   }
 
   if (!best) {
+    if (diagnostics) diagnostics.selectedDetection = null;
     state.rotation = 0;
     state.crop = null;
     renderPreview(state);
     if (reportNoMatch) reportProgress(100, 'Aucun texte détecté.');
     return '';
+  }
+  if (diagnostics) {
+    diagnostics.selectedDetection = {
+      rotation: best.rotation,
+      text: best.lineText,
+      confidence: best.lineConfidence,
+      selectionScore: best.score,
+      bbox: best.crop,
+    };
   }
 
   // Marge autour de la ligne détectée (évite de couper un caractère), calculée
@@ -484,9 +519,23 @@ async function autoRecognize(
 
   reportProgress(90, 'Lecture précise...');
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
+  const refinementPreprocessingStartedAt = performance.now();
   const refinedCanvas = buildOcrCanvas(state, preprocess);
+  const refinementPreprocessingMs = Math.round(performance.now() - refinementPreprocessingStartedAt);
+  const refinementStartedAt = performance.now();
   const { data } = await worker.recognize(refinedCanvas, {}, { text: true });
+  const refinementMs = Math.round(performance.now() - refinementStartedAt);
   if (!isCurrent()) return '';
+  if (diagnostics) {
+    diagnostics.refinement = {
+      confidence: data.confidence ?? null,
+      text: data.text || '',
+      imageWidth: refinedCanvas.width,
+      imageHeight: refinedCanvas.height,
+      preprocessingMs: refinementPreprocessingMs,
+      recognitionMs: refinementMs,
+    };
+  }
   reportProgress(100, 'Reconnaissance terminée.');
   return data.text || '';
 }
@@ -1252,6 +1301,555 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
       downloadExportFile(file);
       alert('Le partage n’a pas pu être ouvert. Le fichier a été téléchargé : choisissez OneDrive depuis vos fichiers.');
     }
+  }
+});
+
+// ---------- Batterie locale de qualité OCR ----------
+const OCR_TEST_MAX_IMAGES = 20;
+const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
+const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+const OCR_TEST_APP_VERSION = '1.29.0';
+const OCR_TEST_TESSERACT_VERSION = '5.1.1';
+let ocrTestMode = null;
+let ocrTestItems = [];
+let ocrTestRunning = false;
+let ocrTestNextId = 1;
+
+const ocrTestModal = document.getElementById('ocrTestModal');
+const ocrTestChoices = document.getElementById('ocrTestChoices');
+const ocrTestWorkspace = document.getElementById('ocrTestWorkspace');
+const ocrTestImageList = document.getElementById('ocrTestImageList');
+const ocrTestProgress = document.getElementById('ocrTestProgress');
+const ocrTestResults = document.getElementById('ocrTestResults');
+const ocrTestRunButton = document.getElementById('runOcrTest');
+const ocrTestShareButton = document.getElementById('shareOcrTestReport');
+const ocrTestConsent = document.getElementById('confirmOcrTestShare');
+const ocrTestFilePicker = document.getElementById('ocrTestFilePicker');
+const ocrTestCameraPicker = document.getElementById('ocrTestCameraPicker');
+
+function resetOcrTest() {
+  ocrTestItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+  ocrTestItems = [];
+  ocrTestMode = null;
+  ocrTestRunning = false;
+  ocrTestImageList.replaceChildren();
+  ocrTestResults.replaceChildren();
+  ocrTestResults.hidden = true;
+  ocrTestProgress.textContent = '';
+  ocrTestChoices.hidden = false;
+  ocrTestWorkspace.hidden = true;
+  ocrTestConsent.checked = false;
+  ocrTestRunButton.disabled = true;
+  ocrTestShareButton.disabled = true;
+  document.getElementById('runOcrTest').textContent = 'Lancer la batterie';
+}
+
+function openOcrTestMode(mode) {
+  resetOcrTest();
+  ocrTestMode = mode;
+  ocrTestChoices.hidden = true;
+  ocrTestWorkspace.hidden = false;
+  document.getElementById('ocrTestModeLabel').textContent = mode === 'asset'
+    ? 'Batterie d’étiquettes d’asset'
+    : 'Batterie de lock screens';
+  openAuditModal('ocrTestModal');
+}
+
+document.getElementById('openOcrTest').addEventListener('click', () => {
+  resetOcrTest();
+  openAuditModal('ocrTestModal');
+});
+document.getElementById('startAssetBattery').addEventListener('click', () => openOcrTestMode('asset'));
+document.getElementById('startNameBattery').addEventListener('click', () => openOcrTestMode('name'));
+document.getElementById('backOcrTestChoices').addEventListener('click', resetOcrTest);
+document.getElementById('cancelOcrTest').addEventListener('click', () => {
+  if (ocrTestRunning) return;
+  closeAuditModal('ocrTestModal');
+  resetOcrTest();
+});
+document.getElementById('addOcrTestFiles').addEventListener('click', () => ocrTestFilePicker.click());
+document.getElementById('captureOcrTestPhoto').addEventListener('click', () => ocrTestCameraPicker.click());
+
+function addOcrTestFiles(fileList, source = 'gallery') {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+  let totalBytes = ocrTestItems.reduce((sum, item) => sum + item.file.size, 0);
+  let rejected = 0;
+  let added = 0;
+  for (const file of files) {
+    if (!file.type.startsWith('image/') || file.size > OCR_TEST_MAX_FILE_BYTES
+      || ocrTestItems.length >= OCR_TEST_MAX_IMAGES || totalBytes + file.size > OCR_TEST_MAX_TOTAL_BYTES) {
+      rejected += 1;
+      continue;
+    }
+    const item = {
+      id: ocrTestNextId++,
+      file,
+      source,
+      expected: '',
+      previewUrl: URL.createObjectURL(file),
+      result: null,
+    };
+    totalBytes += file.size;
+    ocrTestItems.push(item);
+    added += 1;
+  }
+  if (added) invalidateOcrTestResults();
+  renderOcrTestItems();
+  if (rejected) {
+    ocrTestProgress.textContent = `${rejected} photo(s) ignorée(s). Limites: ${OCR_TEST_MAX_IMAGES} photos, 15 Mio par photo et 100 Mio par batterie.`;
+  }
+}
+
+ocrTestFilePicker.addEventListener('change', () => {
+  addOcrTestFiles(ocrTestFilePicker.files, 'gallery-or-file-picker');
+  ocrTestFilePicker.value = '';
+});
+ocrTestCameraPicker.addEventListener('change', () => {
+  addOcrTestFiles(ocrTestCameraPicker.files, 'camera-capture-picker');
+  ocrTestCameraPicker.value = '';
+});
+
+function renderOcrTestItems() {
+  ocrTestImageList.replaceChildren();
+  ocrTestItems.forEach((item, index) => {
+    const row = document.createElement('li');
+    row.className = 'ocr-test-image-item';
+    const image = document.createElement('img');
+    image.className = 'ocr-test-thumbnail';
+    image.src = item.previewUrl;
+    image.alt = `Aperçu ${index + 1}`;
+    const fieldWrap = document.createElement('div');
+    const label = document.createElement('label');
+    label.className = 'ocr-test-photo-label';
+    label.htmlFor = `ocrTestExpected${item.id}`;
+    label.textContent = `Photo ${index + 1} · ${item.file.type || 'type inconnu'} · ${(item.file.size / 1024 / 1024).toFixed(2)} Mio`;
+    const input = document.createElement('input');
+    input.className = 'ocr-test-expected';
+    input.id = `ocrTestExpected${item.id}`;
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.placeholder = ocrTestMode === 'asset' ? 'Valeur attendue, ex. S165964' : 'Nom attendu, ex. SIMON Xavier';
+    input.value = item.expected;
+    input.disabled = ocrTestRunning;
+    input.addEventListener('input', () => {
+      item.expected = input.value;
+      invalidateOcrTestResults();
+      updateOcrTestButtons();
+    });
+    fieldWrap.append(label, input);
+    const remove = document.createElement('button');
+    remove.className = 'btn ocr-test-remove';
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', `Retirer la photo ${index + 1}`);
+    remove.disabled = ocrTestRunning;
+    remove.addEventListener('click', () => {
+      URL.revokeObjectURL(item.previewUrl);
+      ocrTestItems = ocrTestItems.filter((candidate) => candidate !== item);
+      invalidateOcrTestResults();
+      renderOcrTestItems();
+    });
+    row.append(image, fieldWrap, remove);
+    ocrTestImageList.append(row);
+  });
+  updateOcrTestButtons();
+}
+
+function invalidateOcrTestResults() {
+  const hadResults = ocrTestItems.some((item) => item.result);
+  ocrTestItems.forEach((item) => { item.result = null; });
+  ocrTestResults.replaceChildren();
+  ocrTestResults.hidden = true;
+  if (hadResults) ocrTestProgress.textContent = 'Photo ou valeur attendue modifiée. Relancez la batterie avant de partager.';
+}
+
+function updateOcrTestButtons() {
+  const allExpectedValuesPresent = ocrTestItems.length > 0
+    && ocrTestItems.every((item) => item.expected.trim());
+  const allResultsPresent = ocrTestItems.length > 0
+    && ocrTestItems.every((item) => item.result !== null);
+  ocrTestRunButton.disabled = ocrTestRunning || !allExpectedValuesPresent;
+  ocrTestShareButton.disabled = ocrTestRunning || !allResultsPresent
+    || !ocrTestConsent.checked;
+}
+
+ocrTestConsent.addEventListener('change', updateOcrTestButtons);
+
+function normalizeOcrTestValue(value, mode) {
+  const compact = String(value || '').trim().replace(/\s+/g, ' ');
+  return mode === 'asset' ? compact.toUpperCase() : compact.toLocaleLowerCase('fr');
+}
+
+function characterErrorRate(expected, actual) {
+  const left = Array.from(expected);
+  const right = Array.from(actual);
+  if (!left.length) return right.length ? 1 : 0;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= right.length; j += 1) {
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1)
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] / left.length;
+}
+
+async function testOcrImage(item, index, total) {
+  const templateState = ocrTestMode === 'asset' ? assetState : nameState;
+  const config = getLiveConfig(templateState);
+  const snapshot = {
+    image: templateState.image,
+    rotation: templateState.rotation,
+    invert: templateState.invert,
+    crop: templateState.crop,
+  };
+  const startedAt = performance.now();
+  const diagnostics = { rotations: [] };
+  try {
+    const image = await loadImageFile(item.file);
+    templateState.image = image;
+    templateState.rotation = 0;
+    templateState.crop = null;
+    templateState.invert = false;
+    renderPreview(templateState);
+    const recognizedText = await withOcrLock(() => autoRecognize(
+      templateState,
+      config.score,
+      config.detectOrientation,
+      () => {},
+      () => true,
+      'standard',
+      0,
+      false,
+      diagnostics
+    ));
+    const extractedValue = config.extract(recognizedText);
+    const expected = item.expected.trim();
+    const normalizedExpected = normalizeOcrTestValue(expected, ocrTestMode);
+    const normalizedActual = normalizeOcrTestValue(extractedValue, ocrTestMode);
+    item.result = {
+      id: `sample-${String(index + 1).padStart(3, '0')}`,
+      expected,
+      recognizedText,
+      extractedValue,
+      exactMatch: normalizedExpected === normalizedActual,
+      characterErrorRate: characterErrorRate(normalizedExpected, normalizedActual),
+      elapsedMs: Math.round(performance.now() - startedAt),
+      image: {
+        source: item.source,
+        mimeType: item.file.type || 'application/octet-stream',
+        bytes: item.file.size,
+        decodedWidth: image.naturalWidth,
+        decodedHeight: image.naturalHeight,
+      },
+      diagnostics,
+      error: null,
+    };
+  } catch (error) {
+    item.result = {
+      id: `sample-${String(index + 1).padStart(3, '0')}`,
+      expected: item.expected.trim(),
+      recognizedText: '',
+      extractedValue: '',
+      exactMatch: false,
+      characterErrorRate: 1,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      image: {
+        source: item.source,
+        mimeType: item.file.type || 'application/octet-stream',
+        bytes: item.file.size,
+      },
+      diagnostics,
+      error: String(error?.message || error),
+    };
+  } finally {
+    templateState.image = snapshot.image;
+    templateState.rotation = snapshot.rotation;
+    templateState.invert = snapshot.invert;
+    templateState.crop = snapshot.crop;
+    if (snapshot.image) renderPreview(templateState);
+  }
+  ocrTestProgress.textContent = `Analyse ${index + 1}/${total} terminée.`;
+}
+
+function renderOcrTestResults() {
+  const table = document.createElement('table');
+  const head = document.createElement('thead');
+  const header = document.createElement('tr');
+  ['Photo', 'Attendu', 'Reconnu', 'Correspondance', 'Confiance', 'Temps'].forEach((text) => {
+    const cell = document.createElement('th');
+    cell.textContent = text;
+    header.append(cell);
+  });
+  head.append(header);
+  const body = document.createElement('tbody');
+  ocrTestItems.forEach((item, index) => {
+    const result = item.result;
+    const row = document.createElement('tr');
+    const confidence = result?.diagnostics?.refinement?.confidence;
+    [
+      `Photo ${index + 1}`,
+      item.expected,
+      result?.extractedValue || result?.error || 'Aucune valeur',
+      result?.exactMatch ? 'Exacte' : 'Différente',
+      Number.isFinite(confidence) ? `${Math.round(confidence)} %` : 'N/D',
+      result ? `${result.elapsedMs} ms` : 'N/D',
+    ].forEach((text) => {
+      const cell = document.createElement('td');
+      cell.textContent = text;
+      row.append(cell);
+    });
+    body.append(row);
+  });
+  table.append(head, body);
+  ocrTestResults.replaceChildren(table);
+  ocrTestResults.hidden = false;
+}
+
+ocrTestRunButton.addEventListener('click', async () => {
+  if (ocrTestRunning || ocrTestRunButton.disabled) return;
+  ocrTestRunning = true;
+  ocrTestItems.forEach((item) => { item.result = null; });
+  ocrTestResults.hidden = true;
+  ocrTestProgress.textContent = 'Initialisation du moteur OCR…';
+  ocrTestRunButton.textContent = 'Analyse en cours…';
+  renderOcrTestItems();
+  updateOcrTestButtons();
+  const start = performance.now();
+  try {
+    if (!await prepareOcr(ocrTestMode === 'asset' ? assetState : nameState)) {
+      throw new Error('Le moteur OCR ne peut pas être initialisé.');
+    }
+    for (let index = 0; index < ocrTestItems.length; index += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await testOcrImage(ocrTestItems[index], index, ocrTestItems.length);
+      renderOcrTestResults();
+    }
+    const exactCount = ocrTestItems.filter((item) => item.result?.exactMatch).length;
+    ocrTestProgress.textContent = `Batterie terminée: ${exactCount}/${ocrTestItems.length} valeurs exactes; ${(performance.now() - start).toFixed(0)} ms au total.`;
+  } catch (error) {
+    ocrTestProgress.textContent = `Batterie interrompue: ${error?.message || error}`;
+  } finally {
+    ocrTestRunning = false;
+    ocrTestRunButton.textContent = 'Relancer la batterie';
+    renderOcrTestItems();
+    updateOcrTestButtons();
+  }
+});
+
+const ZIP_CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, value) => {
+  let crc = value;
+  for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  return crc >>> 0;
+});
+
+function zipCrc32(bytes) {
+  let crc = 0xffffffff;
+  for (let index = 0; index < bytes.length; index += 1) {
+    crc = (crc >>> 8) ^ ZIP_CRC32_TABLE[(crc ^ bytes[index]) & 0xff];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zipHeader(size, nameBytes, crc, offset, central = false, timestamp = new Date()) {
+  const headerSize = central ? 46 : 30;
+  const header = new Uint8Array(headerSize + nameBytes.length);
+  const view = new DataView(header.buffer);
+  const dosTime = (timestamp.getHours() << 11) | (timestamp.getMinutes() << 5) | Math.floor(timestamp.getSeconds() / 2);
+  const dosDate = ((Math.max(1980, timestamp.getFullYear()) - 1980) << 9)
+    | ((timestamp.getMonth() + 1) << 5) | timestamp.getDate();
+  if (central) {
+    view.setUint32(0, 0x02014b50, true);
+    view.setUint16(4, 20, true);
+    view.setUint16(6, 20, true);
+    view.setUint16(8, 0x0800, true);
+    view.setUint16(10, 0, true);
+    view.setUint16(12, dosTime, true);
+    view.setUint16(14, dosDate, true);
+    view.setUint32(16, crc, true);
+    view.setUint32(20, size, true);
+    view.setUint32(24, size, true);
+    view.setUint16(28, nameBytes.length, true);
+    view.setUint16(30, 0, true);
+    view.setUint16(32, 0, true);
+    view.setUint16(34, 0, true);
+    view.setUint16(36, 0, true);
+    view.setUint32(38, 0, true);
+    view.setUint32(42, offset, true);
+  } else {
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint16(4, 20, true);
+    view.setUint16(6, 0x0800, true);
+    view.setUint16(8, 0, true);
+    view.setUint16(10, dosTime, true);
+    view.setUint16(12, dosDate, true);
+    view.setUint32(14, crc, true);
+    view.setUint32(18, size, true);
+    view.setUint32(22, size, true);
+    view.setUint16(26, nameBytes.length, true);
+    view.setUint16(28, 0, true);
+  }
+  header.set(nameBytes, headerSize);
+  return header;
+}
+
+async function createOcrTestZip(entries) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const entry of entries) {
+    // The file bytes are read one at a time for CRC calculation; photo blobs remain uncompressed.
+    // eslint-disable-next-line no-await-in-loop
+    const bytes = new Uint8Array(await entry.blob.arrayBuffer());
+    if (bytes.length > 0xffffffff || offset > 0xffffffff) throw new Error('Le rapport est trop volumineux pour le format ZIP.');
+    const nameBytes = encoder.encode(entry.name);
+    const crc = zipCrc32(bytes);
+    const timestamp = new Date();
+    const localHeader = zipHeader(bytes.length, nameBytes, crc, 0, false, timestamp);
+    parts.push(localHeader, entry.blob);
+    centralParts.push(zipHeader(bytes.length, nameBytes, crc, offset, true, timestamp));
+    offset += localHeader.length + bytes.length;
+  }
+  const centralOffset = offset;
+  centralParts.forEach((part) => { offset += part.length; });
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(4, 0, true);
+  endView.setUint16(6, 0, true);
+  endView.setUint16(8, entries.length, true);
+  endView.setUint16(10, entries.length, true);
+  endView.setUint32(12, offset - centralOffset, true);
+  endView.setUint32(16, centralOffset, true);
+  endView.setUint16(20, 0, true);
+  return new Blob([...parts, ...centralParts, end], { type: 'application/zip' });
+}
+
+function ocrTestPhotoExtension(file) {
+  const extension = file.name.split('.').pop().toLowerCase();
+  return /^[a-z0-9]{1,8}$/.test(extension) ? extension : 'image';
+}
+
+function buildOcrTestReport() {
+  const successes = ocrTestItems.filter((item) => item.result?.exactMatch).length;
+  const elapsedTimes = ocrTestItems.map((item) => item.result?.elapsedMs).filter(Number.isFinite).sort((a, b) => a - b);
+  const p95Index = Math.max(0, Math.ceil(elapsedTimes.length * 0.95) - 1);
+  return {
+    schema: 'audit-bureau-propre-ocr-benchmark/v1',
+    createdAt: new Date().toISOString(),
+    privacy: {
+      processing: 'local-browser-only',
+      photoPolicy: 'original-photo-bytes-included-in-this-explicitly-shared-archive',
+      warning: 'Photos may contain personal information and EXIF metadata such as location.',
+    },
+    application: {
+      version: OCR_TEST_APP_VERSION,
+      tesseractJsVersion: OCR_TEST_TESSERACT_VERSION,
+      languageModels: ['eng.traineddata.gz', 'fra.traineddata.gz'],
+      recognitionEngineMode: 'LSTM (OEM 1)',
+      pipeline: {
+        detectorPageSegmentationMode: 11,
+        refinementPageSegmentationMode: 6,
+        preprocessing: 'grayscale + global min/max contrast stretch; no adaptive retry',
+        maxLongSideBeforeCrop: 1800,
+        minLongSideAfterCrop: 700,
+        maxUpscale: 4,
+        assetRotations: ROTATIONS,
+        nameRotations: [0],
+      },
+    },
+    environment: {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform || null,
+      languages: navigator.languages || [],
+      hardwareConcurrency: navigator.hardwareConcurrency || null,
+      deviceMemoryGiB: navigator.deviceMemory || null,
+      screen: { width: screen.width, height: screen.height, pixelRatio: window.devicePixelRatio || 1 },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      secureContext: window.isSecureContext,
+      onlineAtExport: navigator.onLine,
+    },
+    battery: {
+      category: ocrTestMode === 'asset' ? 'asset-label' : 'lock-screen-name',
+      sampleCount: ocrTestItems.length,
+      exactMatches: successes,
+      exactMatchRate: ocrTestItems.length ? successes / ocrTestItems.length : 0,
+      medianSampleElapsedMs: elapsedTimes.length
+        ? elapsedTimes[Math.floor((elapsedTimes.length - 1) / 2)]
+        : null,
+      p95SampleElapsedMs: elapsedTimes.length ? elapsedTimes[p95Index] : null,
+      samples: ocrTestItems.map((item, index) => ({
+        ...item.result,
+        photoPath: `photos/sample-${String(index + 1).padStart(3, '0')}.${ocrTestPhotoExtension(item.file)}`,
+      })),
+    },
+    notes: [
+      'Expected values were entered by the operator. Exact match ignores letter case and collapses whitespace; asset values are compared uppercase.',
+      'The character error rate is computed on the extracted field value, not the full raw OCR transcription.',
+      'OCR confidence is Tesseract confidence, not a calibrated probability.',
+      'Original images are stored byte-for-byte; filenames are replaced with sample IDs, but EXIF metadata is not removed.',
+    ],
+  };
+}
+
+async function createOcrTestReportFile() {
+  const report = buildOcrTestReport();
+  const entries = [{
+    name: 'report.json',
+    blob: new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }),
+  }];
+  ocrTestItems.forEach((item, index) => {
+    entries.push({
+      name: `photos/sample-${String(index + 1).padStart(3, '0')}.${ocrTestPhotoExtension(item.file)}`,
+      blob: item.file,
+    });
+  });
+  const zip = await createOcrTestZip(entries);
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  return new File([zip], `ocr_benchmark_${ocrTestMode}_${stamp}.zip`, { type: 'application/zip' });
+}
+
+function downloadOcrTestReport(file) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+ocrTestShareButton.addEventListener('click', async () => {
+  if (!ocrTestConsent.checked || ocrTestShareButton.disabled) return;
+  ocrTestShareButton.disabled = true;
+  ocrTestProgress.textContent = 'Préparation du ZIP avec le rapport et les photos originales…';
+  try {
+    const file = await createOcrTestReportFile();
+    if (!navigator.share || !navigator.canShare || !navigator.canShare({ files: [file] })) {
+      downloadOcrTestReport(file);
+      ocrTestProgress.textContent = `Rapport téléchargé (${(file.size / 1024 / 1024).toFixed(1)} Mio). Partagez ce ZIP par le canal autorisé.`;
+      return;
+    }
+    await navigator.share({
+      title: 'Rapport de qualité OCR',
+      text: 'Rapport local de benchmark OCR, avec photos originales.',
+      files: [file],
+    });
+    ocrTestProgress.textContent = 'Partage terminé. Les photos n’ont été transmises qu’au canal choisi.';
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      ocrTestProgress.textContent = `Partage impossible: ${error?.message || error}`;
+    } else {
+      ocrTestProgress.textContent = 'Partage annulé. Le rapport reste disponible pour un nouvel essai.';
+    }
+  } finally {
+    updateOcrTestButtons();
   }
 });
 
