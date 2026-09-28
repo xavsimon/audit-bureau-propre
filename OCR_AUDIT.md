@@ -166,6 +166,7 @@ n'est jamais ajouté au JSON. L'analyseur reste compatible avec les formats v1 e
 | `battery.samples[].image` | Source de capture, type, poids, date de modification si disponible, dimensions décodées, réglages de caméra réellement exposés et mesures qualité automatiques. | Relier absence de résultat et caractéristiques mesurables de l'entrée. |
 | `image.quality` | Moyenne de luminance et écart-type de contraste normalisés sur `[0,1]`; variance du Laplacien comme indice de netteté; calculés sur un aperçu local de 256 px maximum. | Comparer les groupes avec/sans valeur extraite; ce sont des signaux approximatifs, pas des seuils universels de qualité. |
 | `battery.samples[].diagnostics` | Lignes et confiances Tesseract par rotation, sélection et relecture, plus erreur éventuelle. | Identifier les étapes et orientations associées aux absences de résultat. |
+| `diagnostics.nameFallback` | Score ayant déclenché le repli, nombre de crops tentés (maximum 4), longueurs/confidences/temps par tentative, score amélioré et indicateur de suggestion récupérée. Les chaînes OCR alternatives ne sont pas recopiées dans cet objet. | Mesurer le repli nom PSM 7 sans multiplier les valeurs personnelles dans les diagnostics. |
 | `battery.groundTruth` | `provided: false`, exactitude et CER à `null`. | Interdire toute interprétation trompeuse de la prédiction comme vérité. |
 | agrégats de batterie | Nombre de photos, valeurs proposées/absentes, taux de sortie et médiane/p95 de latence. `elapsedMs` v3 inclut décodage, mesures d'image et OCR; l'initialisation du moteur est exclue. | Décrire le comportement observé sans annotation manuelle. |
 
@@ -174,6 +175,8 @@ n'est jamais ajouté au JSON. L'analyseur reste compatible avec les formats v1 e
 - Le taux de sortie mesure la proportion d'images pour lesquelles l'extracteur a produit une valeur non vide. Ce n'est **pas** un taux d'exactitude: une mauvaise valeur reste une sortie.
 - Sans vérité terrain externe, l'exactitude et le CER ne sont pas calculables. Le système ne devine ni le texte attendu ni si sa prédiction est correcte. Les rapports v1/v2 annotés conservent leurs métriques et restent comparables dans l'analyseur.
 - Le script agrège les valeurs de sortie sans les afficher, les absences, latences, confiances, rotations et mesures automatiques par statut de sortie. Il peut proposer d'examiner les groupes où les signaux d'image diffèrent, mais ne peut pas attribuer seul une cause OCR certaine.
+- Pour les noms, si le premier résultat reste sous le score heuristique 2, le pipeline relit jusqu'à quatre lignes classées en PSM 7. Une proposition faible est conservée comme suggestion à vérifier au lieu d'être supprimée; la reconnaissance live exige toujours une confirmation tactile avant de remplir le champ.
+- Sur un nom live, une variance du Laplacien sous 300 affiche un conseil de reprise. Ce seuil provisoire, choisi après le rejeu des six images disponibles, n'arrête pas l'OCR et n'est ni normalisé par appareil ni une mesure calibrée de netteté; le repréciser après davantage de captures et d'appareils.
 - Pour établir l'exactitude, il faut ultérieurement associer une vérité terrain fiable aux mêmes images, dans un jeu d'annotations privé distinct. Cette annotation n'est pas demandée à l'utilisateur dans le parcours de capture.
 
 ### Analyse locale des archives

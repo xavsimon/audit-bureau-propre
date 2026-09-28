@@ -75,14 +75,18 @@ def sample_metrics(samples: list[dict[str, Any]]) -> dict[str, Any]:
         "output": defaultdict(list),
         "no-output": defaultdict(list),
     }
+    name_fallback_runs = []
     for sample in valid_samples:
         prediction = sample.get("prediction") if isinstance(sample.get("prediction"), dict) else {}
         extracted = prediction.get("extractedValue", sample.get("extractedValue", ""))
         has_output = isinstance(extracted, str) and bool(extracted.strip())
         (output_samples if has_output else no_output_samples).append(sample)
+        diagnostics = sample.get("diagnostics") if isinstance(sample.get("diagnostics"), dict) else {}
+        name_fallback = diagnostics.get("nameFallback")
+        if isinstance(name_fallback, dict):
+            name_fallback_runs.append(name_fallback)
         confidence = number(prediction.get("confidence"))
         if confidence is None:
-            diagnostics = sample.get("diagnostics") if isinstance(sample.get("diagnostics"), dict) else {}
             refinement = diagnostics.get("refinement") if isinstance(diagnostics.get("refinement"), dict) else {}
             confidence = number(refinement.get("confidence"))
         if confidence is not None:
@@ -105,6 +109,7 @@ def sample_metrics(samples: list[dict[str, Any]]) -> dict[str, Any]:
         "no_output_samples": no_output_samples,
         "confidences": confidences,
         "quality_by_output": quality_by_output,
+        "name_fallback_runs": name_fallback_runs,
     }
 
 
@@ -241,6 +246,31 @@ def make_markdown(reports: list[dict[str, Any]], problems: list[str]) -> str:
                                   else "n/d" for field, _ in quality_fields)
                     + f" | {format_percent(statistics.median(confidence) / 100) if confidence else 'n/d'} |"
                 )
+
+        fallback_runs = [run for entry in report_metrics for run in entry["name_fallback_runs"]]
+        if fallback_runs:
+            fallback_attempts = [
+                attempt
+                for run in fallback_runs
+                for attempt in run.get("attempts", [])
+                if isinstance(attempt, dict)
+            ]
+            fallback_elapsed = [
+                value for run in fallback_runs
+                if (value := number(run.get("elapsedMs"))) is not None
+            ]
+            improved = sum(run.get("improvedScore") is True for run in fallback_runs)
+            recovered = sum(run.get("recoveredConfidentSuggestion") is True for run in fallback_runs)
+            lines.extend([
+                "",
+                "## Reprises des noms en PSM 7",
+                "",
+                f"Replis déclenchés: **{len(fallback_runs)}** · Tentatives de lecture: **{len(fallback_attempts)}** · "
+                f"Score amélioré: **{improved}** · Suggestions au score heuristique récupérées: **{recovered}** · "
+                f"Durée médiane: **{format_ms(statistics.median(fallback_elapsed) if fallback_elapsed else None)}**.",
+                "",
+                "Ces agrégats ne contiennent pas les chaînes OCR candidates; un score récupéré n'est pas une garantie d'exactitude.",
+            ])
 
         total_failed = sum(len(entry["failed"]) for entry in report_metrics)
         total_scored = sum(entry["scored"] for entry in report_metrics)

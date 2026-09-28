@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.33.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.34.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -149,8 +149,11 @@ OCR_AUDIT.md      audit initial et protocole d'évaluation OCR
   chargement bloque les clics jusqu'à ce que la caméra et l'OCR soient prêts.
   La première analyse est plus longue, le temps de charger le moteur OCR.
 - Le scanner du nom utilise directement l'orientation normale ; la détection de la zone de texte
-  prend néanmoins quelques secondes.
+  prend néanmoins quelques secondes. Si la relecture de la ligne principale ne suffit pas, le moteur
+  relit jusqu'à quatre lignes candidates en PSM 7 avant de conclure.
 - La reconnaissance du numéro d'asset et du nom est une **suggestion automatique** : relisez
   toujours les champs avant d'ajouter une entrée à la liste.
+- Une image de nom détectée comme peu nette affiche un conseil de reprise; une proposition de nom
+  partielle reste visible mais doit être vérifiée. Ces signaux ne garantissent pas l'exactitude.
 - Si l'étiquette/l'écran n'est pas détecté automatiquement (éclairage difficile, reflet...),
   utilisez le bloc "Réglage manuel" pour tourner l'image et dessiner vous-même le cadre.

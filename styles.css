@@ -383,6 +383,11 @@ main {
 .scan-result[hidden] { display: none; }
 .scan-result span { font-size: 0.85rem; }
 .scan-result strong { font-size: 2rem; line-height: 1.1; letter-spacing: 0.04em; }
+.scan-result-uncertain {
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #92400e;
+}
 
 .live-scan-result {
   position: absolute;

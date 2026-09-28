@@ -21,6 +21,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveWrap: document.getElementById(liveWrapId),
     scanLoading: document.getElementById(liveWrapId).querySelector('.scan-loading'),
     liveResult: document.getElementById(liveWrapId).querySelector('.live-scan-result'),
+    liveResultLabel: document.getElementById(liveWrapId).querySelector('.live-scan-result span'),
     liveResultValue: document.getElementById(liveWrapId).querySelector('.live-scan-result strong'),
     liveVideo: document.getElementById(liveVideoId),
     liveStatus: document.getElementById(liveStatusId),
@@ -388,17 +389,33 @@ function scoreAssetLines(lines) {
 
 // Repère la ligne la plus probable pour un nom de personne (score OCR + heuristique de forme).
 function scoreNameLines(lines) {
-  let bestLine = null;
-  let bestScore = -Infinity;
+  const candidates = [];
   for (const l of lines) {
     if (!/[A-Za-zÀ-ÿ]/.test(l.text) || NAME_STOPWORDS.test(l.text)) continue;
     const score = l.confidence + scoreNameLine(l.text) * 15;
-    if (score > bestScore) {
-      bestScore = score;
-      bestLine = l;
-    }
+    candidates.push({ line: l, score });
   }
-  return { line: bestLine, score: bestLine ? bestScore : -Infinity };
+  candidates.sort((a, b) => b.score - a.score);
+  return {
+    line: candidates[0]?.line || null,
+    score: candidates[0]?.score ?? -Infinity,
+    candidates,
+  };
+}
+
+function applyRecognitionCrop(state, candidate) {
+  const padX = candidate.crop.w * 0.25 + 0.015;
+  const padY = candidate.crop.h * 0.4 + 0.01;
+  const x = Math.max(0, candidate.crop.x - padX);
+  const y = Math.max(0, candidate.crop.y - padY);
+  state.rotation = candidate.rotation;
+  state.crop = {
+    x,
+    y,
+    w: clamp01(Math.min(1 - x, candidate.crop.w + padX * 2)),
+    h: clamp01(Math.min(1 - y, candidate.crop.h + padY * 2)),
+  };
+  renderPreview(state);
 }
 
 // Repère la meilleure zone de texte puis la relit en haute qualité. L'étiquette
@@ -423,6 +440,7 @@ async function autoRecognize(
   };
   const worker = await getWorker();
   let best = null;
+  const detectedCandidates = [];
   const rotations = detectOrientation ? ROTATIONS : [0];
 
   await worker.setParameters({ tessedit_pageseg_mode: '11' });
@@ -448,7 +466,7 @@ async function autoRecognize(
     const recognitionMs = Math.round(performance.now() - recognitionStartedAt);
     if (!isCurrent()) return '';
     const lines = flattenLines(data);
-    const { line, score } = scoreFn(lines);
+    const { line, score, candidates: rankedLines } = scoreFn(lines);
     if (diagnostics) {
       diagnostics.rotations.push({
         rotation,
@@ -466,19 +484,22 @@ async function autoRecognize(
         selectionScore: Number.isFinite(score) ? score : null,
       });
     }
-    if (line && score > (best ? best.score : -Infinity)) {
-      best = {
+    const linesToKeep = rankedLines || (line ? [{ line, score }] : []);
+    for (const candidate of linesToKeep) {
+      const detectedCandidate = {
         rotation,
-        score,
-        lineText: line.text,
-        lineConfidence: line.confidence,
+        score: candidate.score,
+        lineText: candidate.line.text,
+        lineConfidence: candidate.line.confidence,
         crop: {
-          x: line.bbox.x0 / canvas.width,
-          y: line.bbox.y0 / canvas.height,
-          w: (line.bbox.x1 - line.bbox.x0) / canvas.width,
-          h: (line.bbox.y1 - line.bbox.y0) / canvas.height,
+          x: candidate.line.bbox.x0 / canvas.width,
+          y: candidate.line.bbox.y0 / canvas.height,
+          w: (candidate.line.bbox.x1 - candidate.line.bbox.x0) / canvas.width,
+          h: (candidate.line.bbox.y1 - candidate.line.bbox.y0) / canvas.height,
         },
       };
+      detectedCandidates.push(detectedCandidate);
+      if (detectedCandidate.score > (best ? best.score : -Infinity)) best = detectedCandidate;
     }
   }
 
@@ -500,22 +521,7 @@ async function autoRecognize(
     };
   }
 
-  // Marge autour de la ligne détectée (évite de couper un caractère), calculée
-  // proportionnellement à la taille de la ligne : une marge fixe trop généreuse
-  // finit par englober des éléments voisins (photo de profil, icône...) et
-  // perturbe la relecture.
-  const padX = best.crop.w * 0.25 + 0.015;
-  const padY = best.crop.h * 0.4 + 0.01;
-  const x = Math.max(0, best.crop.x - padX);
-  const y = Math.max(0, best.crop.y - padY);
-  state.rotation = best.rotation;
-  state.crop = {
-    x,
-    y,
-    w: clamp01(Math.min(1 - x, best.crop.w + padX * 2)),
-    h: clamp01(Math.min(1 - y, best.crop.h + padY * 2)),
-  };
-  renderPreview(state);
+  applyRecognitionCrop(state, best);
 
   reportProgress(90, 'Lecture précise...');
   await worker.setParameters({ tessedit_pageseg_mode: '6' });
@@ -536,8 +542,101 @@ async function autoRecognize(
       recognitionMs: refinementMs,
     };
   }
+  let resultText = data.text || '';
+  if (scoreFn === scoreNameLines && scoreNameLine(getNameSuggestion(resultText)) < 2) {
+    let bestSuggestion = getNameSuggestion(resultText);
+    let bestSuggestionScore = bestSuggestion ? scoreNameLine(bestSuggestion) : -Infinity;
+    const initialSuggestionScore = bestSuggestionScore;
+    let suggestionCandidate = bestSuggestion ? best : null;
+    const retryCandidates = detectedCandidates
+      .sort((a, b) => b.score - a.score)
+      .filter((candidate, index, candidates) => (
+        candidates.findIndex((item) => item.lineText === candidate.lineText) === index
+      ))
+      .slice(0, 4);
+    const fallbackStartedAt = performance.now();
+    const fallbackAttempts = [];
+    let selectedFallbackAttempt = null;
+    if (retryCandidates.length) {
+      await worker.setParameters({ tessedit_pageseg_mode: '7' });
+      for (let i = 0; i < retryCandidates.length; i += 1) {
+        if (!isCurrent()) return '';
+        const candidate = retryCandidates[i];
+        applyRecognitionCrop(state, candidate);
+        reportProgress(92 + Math.round(((i + 1) / retryCandidates.length) * 7), `Autre lecture du nom... (${i + 1}/${retryCandidates.length})`);
+        const retryStartedAt = performance.now();
+        try {
+          const retryCanvas = buildOcrCanvas(state, preprocess);
+          // eslint-disable-next-line no-await-in-loop
+          const { data: retryData } = await worker.recognize(retryCanvas, {}, { text: true });
+          const suggestion = getNameSuggestion(retryData.text || '');
+          const suggestionScore = suggestion ? scoreNameLine(suggestion) : -Infinity;
+          fallbackAttempts.push({
+            rotation: candidate.rotation,
+            candidateLineLength: candidate.lineText.length,
+            detectorConfidence: candidate.lineConfidence,
+            recognizedTextLength: (retryData.text || '').length,
+            suggestionLength: suggestion.length,
+            suggestionScore: Number.isFinite(suggestionScore) ? suggestionScore : null,
+            confidence: retryData.confidence ?? null,
+            elapsedMs: Math.round(performance.now() - retryStartedAt),
+            error: null,
+          });
+          if (suggestionScore > bestSuggestionScore) {
+            bestSuggestion = suggestion;
+            bestSuggestionScore = suggestionScore;
+            suggestionCandidate = candidate;
+            selectedFallbackAttempt = fallbackAttempts.length - 1;
+          }
+          if (suggestion && suggestionScore >= 2) break;
+        } catch (error) {
+          fallbackAttempts.push({
+            rotation: candidate.rotation,
+            candidateLineLength: candidate.lineText.length,
+            detectorConfidence: candidate.lineConfidence,
+            recognizedTextLength: 0,
+            suggestionLength: 0,
+            suggestionScore: null,
+            confidence: null,
+            elapsedMs: Math.round(performance.now() - retryStartedAt),
+            error: String(error?.message || error),
+          });
+        }
+      }
+    }
+    if (diagnostics) {
+      diagnostics.nameFallback = {
+        pageSegmentationMode: 7,
+        triggerScore: Number.isFinite(initialSuggestionScore) ? initialSuggestionScore : null,
+        candidateCount: retryCandidates.length,
+        attempts: fallbackAttempts,
+        elapsedMs: Math.round(performance.now() - fallbackStartedAt),
+        improvedScore: bestSuggestionScore > initialSuggestionScore,
+        recoveredConfidentSuggestion: bestSuggestionScore >= 2,
+        selectedAttempt: selectedFallbackAttempt,
+      };
+    }
+    if (bestSuggestion) {
+      if (suggestionCandidate) {
+        applyRecognitionCrop(state, suggestionCandidate);
+        if (diagnostics && selectedFallbackAttempt !== null) {
+          diagnostics.selectedDetection = {
+            rotation: suggestionCandidate.rotation,
+            text: suggestionCandidate.lineText,
+            confidence: suggestionCandidate.lineConfidence,
+            selectionScore: suggestionCandidate.score,
+            bbox: suggestionCandidate.crop,
+            stage: 'name-fallback-psm-7',
+          };
+          diagnostics.nameFallback.finalConfidence = fallbackAttempts[selectedFallbackAttempt]?.confidence ?? null;
+        }
+      }
+      resultText = bestSuggestion;
+    }
+    if (retryCandidates.length) await worker.setParameters({ tessedit_pageseg_mode: '6' });
+  }
   reportProgress(100, 'Reconnaissance terminée.');
-  return data.text || '';
+  return resultText;
 }
 
 // ---------- Extraction heuristique ----------
@@ -556,6 +655,7 @@ function normalizeAssetNumber(value) {
 }
 
 const NAME_STOPWORDS = /pour d[ée]verrouiller|options? de connexion|mot de passe|entrer|appuyez|glissez|touch id|face id|empreinte|verrouill|lecteur|analysez|doigt|windows|iphone|ipad|entsperren|password|pin\b/i;
+const NAME_LOW_SHARPNESS_VARIANCE = 300;
 
 function scoreNameLine(line) {
   const words = line.split(/\s+/).filter(Boolean);
@@ -589,6 +689,11 @@ function extractName(text) {
   return kept.join(' ') || lines[0];
 }
 
+function getNameSuggestion(text) {
+  const value = extractName(text);
+  return /[A-Za-zÀ-ÿ]{2}/.test(value) && !NAME_STOPWORDS.test(value) ? value : '';
+}
+
 function getLiveConfig(state) {
   if (state === assetState) {
     return {
@@ -610,10 +715,9 @@ function getLiveConfig(state) {
     scanProgressId: 'scanProgressName',
     score: scoreNameLines,
     detectOrientation: false,
-    extract: (text) => {
-      const value = extractName(text);
-      return scoreNameLine(value) >= 2 ? value : '';
-    },
+    extract: getNameSuggestion,
+    isName: true,
+    isUncertain: (value) => scoreNameLine(value) < 2,
   };
 }
 
@@ -762,6 +866,10 @@ function clearLiveResult(state, config) {
   document.getElementById(config.resultId).hidden = true;
   document.getElementById(config.resultValueId).textContent = '';
   state.liveResult.hidden = true;
+  state.liveResult.classList.remove('scan-result-uncertain');
+  state.liveResultLabel.textContent = config.isName
+    ? 'Nom OCR - toucher pour vérifier'
+    : 'Valeur détectée - toucher pour garder';
   state.liveResultValue.textContent = '';
   resetScanProgress(state, config);
 }
@@ -796,6 +904,15 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
   state.liveBtn.disabled = true;
   const progressEl = document.getElementById(config.progressId);
   const statusEl = liveCapture ? state.liveStatus : progressEl;
+  let lowSharpness = false;
+  if (config.isName) {
+    try {
+      const quality = measureOcrImageQuality(image);
+      lowSharpness = quality?.sharpnessLaplacianVariance < NAME_LOW_SHARPNESS_VARIANCE;
+    } catch (e) {
+      lowSharpness = false;
+    }
+  }
   try {
     if (!await prepareOcr(state)) {
       statusEl.textContent = 'OCR indisponible. Réessayez.';
@@ -841,21 +958,38 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     if (liveCapture && !state.liveActive) return;
     const value = config.extract(text);
     if (value) {
-      document.getElementById(config.fieldId).value = value;
+      const uncertain = Boolean(config.isUncertain?.(value));
+      const qualityNote = lowSharpness
+        ? 'Image peu nette : stabilisez le téléphone et rapprochez-vous, ou vérifiez la suggestion.'
+        : '';
+      const resultElement = document.getElementById(config.resultId);
+      resultElement.classList.toggle('scan-result-uncertain', uncertain);
       if (liveCapture) {
         resetScanProgress(state, config);
         state.liveResultValue.textContent = value;
+        state.liveResult.classList.toggle('scan-result-uncertain', uncertain);
+        state.liveResultLabel.textContent = config.isName
+          ? `${uncertain ? 'Suggestion partielle' : 'Suggestion OCR'} - toucher pour vérifier`
+          : 'Valeur détectée - toucher pour garder';
         state.liveResult.hidden = false;
-        state.liveStatus.textContent = 'Valeur trouvée. Touchez l\'encart vert pour la garder, ou l\'image pour rescanner.';
+        state.liveStatus.textContent = `${uncertain ? 'Suggestion à vérifier.' : 'Valeur trouvée.'} Touchez l'encart pour confirmer, ou l'image pour rescanner. ${qualityNote}`.trim();
       } else {
+        document.getElementById(config.fieldId).value = value;
         document.getElementById(config.resultValueId).textContent = value;
+        const resultLabel = resultElement.querySelector('span');
+        if (config.isName) {
+          resultLabel.textContent = `${uncertain ? 'Suggestion partielle à vérifier' : 'Suggestion OCR à vérifier'}${lowSharpness ? ' · image peu nette' : ''}`;
+        }
         document.getElementById(config.resultId).hidden = false;
       }
       flashScanSuccess();
     } else {
+      const advice = lowSharpness
+        ? ' Image peu nette : stabilisez le téléphone et rapprochez-vous.'
+        : '';
       const message = liveCapture
-        ? 'Aucun texte reconnu. Touchez l\'image pour réessayer.'
-        : 'Aucun texte reconnu. Relancez la capture pour réessayer.';
+        ? `Aucun texte reconnu. Touchez l'image pour réessayer.${advice}`
+        : `Aucun texte reconnu. Relancez la capture pour réessayer.${advice}`;
       updateScanProgress(state, config, liveCapture, 100, message);
       if (liveCapture) flashLiveFailure(state);
       else flashScanFailure();
@@ -1308,7 +1442,7 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
 const OCR_TEST_MAX_IMAGES = 20;
 const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
 const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
-const OCR_TEST_APP_VERSION = '1.33.0';
+const OCR_TEST_APP_VERSION = '1.34.0';
 const OCR_TEST_TESSERACT_VERSION = '5.1.1';
 let ocrTestMode = null;
 let ocrTestItems = [];
@@ -1888,6 +2022,9 @@ async function buildOcrTestReport() {
       pipeline: {
         detectorPageSegmentationMode: 11,
         refinementPageSegmentationMode: 6,
+        nameFallbackPageSegmentationMode: 7,
+        nameFallbackMaxCandidates: 4,
+        lowSharpnessAdviceThreshold: 300,
         preprocessing: 'grayscale + global min/max contrast stretch; no adaptive retry',
         maxLongSideBeforeCrop: 1800,
         minLongSideAfterCrop: 700,
@@ -1930,6 +2067,8 @@ async function buildOcrTestReport() {
     notes: [
       'No ground-truth values are collected; recognitionYieldRate means a non-empty extracted value, not an accuracy score.',
       'Image quality values are local, approximate measurements on a 256-pixel preview; they are diagnostic signals, not pass/fail thresholds.',
+      'Name extraction retries up to four ranked text-line crops with PSM 7 when the initial suggestion scores below 2; fallback attempts record lengths, scores, confidence and timing but not alternative OCR strings.',
+      'The live scanner marks low sharpness for a retake suggestion and uncertain name candidates for manual confirmation; neither is a calibrated quality or correctness guarantee.',
       'OCR confidence is Tesseract confidence, not a calibrated probability.',
       'Original images are stored byte-for-byte; filenames are replaced with sample IDs, but EXIF metadata is not removed.',
       'Device/browser details and live camera settings are recorded only when the browser exposes them.',
