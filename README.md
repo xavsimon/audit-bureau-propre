@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.32.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.33.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -101,25 +101,26 @@ Deux façons simples de faire cela, au choix :
 
 ## Tester la qualité de l'OCR
 
-En bas de l'écran, ouvrez **"Tester la qualité de l'OCR"**, puis choisissez séparément **Batterie
-d'étiquettes** ou **Batterie de lock screens**. Saisissez la valeur attendue, cliquez sur **"Ajouter des
-photos"** puis prenez autant de photos que nécessaire dans la fenêtre caméra. **"Terminer les photos"**
-revient à la batterie. Cliquez ensuite sur **"Lancer la batterie"** pour analyser toutes les images dans
-le même pipeline OCR que l'utilisation normale, puis sur **"Partager le rapport avec les photos"**. Le
-bouton **"Quitter le mode test"** arrête le test; les entrées d'audit ne sont jamais modifiées.
+En bas de l'écran, ouvrez **"Tester la qualité de l'OCR"**, choisissez **"Photographier une étiquette"**
+ou **"Photographier un écran de verrouillage"**, puis prenez les photos. Cliquez sur **"Analyser les
+photos"** pour obtenir la valeur que le pipeline normal aurait proposée, puis sur **"Partager le rapport
+avec les photos"**. Aucune valeur attendue, condition de capture ou référence n'est à saisir. Le bouton
+**"Quitter le mode test"** arrête le test; les entrées d'audit ne sont jamais modifiées.
 
-Le bouton de partage produit un fichier ZIP nommé `rapport_ocr_<catégorie>_<AAAA-MM-JJ>_<HH-MM-SS>.zip`
+Le bouton de partage produit un fichier ZIP nommé `rapport_ocr_v3_<catégorie>_<AAAA-MM-JJ>_<HH-MM-SS>.zip`
 (horodatage local du téléphone), contenant `report.json` et les photos originales, sans
-recompression. Le schéma `audit-bureau-propre-ocr-benchmark/v2` ajoute une référence de campagne et
-le contexte commun de prise de vue (modèle, luminosité, reflets, netteté, cadrage, inclinaison et
-note facultative). Les métriques, résultats OCR, diagnostics par rotation, dimensions, version et
-configuration sont conservés; le détail du format et des valeurs est défini dans [OCR_AUDIT.md](OCR_AUDIT.md).
-Les noms de fichiers d'origine sont remplacés par des identifiants d'échantillon. Les ZIP ne sont pas
-compressés au-delà des photos déjà compressées et peuvent donc être volumineux.
+recompression. Le schéma `audit-bureau-propre-ocr-benchmark/v3` enregistre le texte OCR brut, la valeur
+extraite, les diagnostics, les dimensions et des mesures automatiques de luminosité, contraste et
+netteté, ainsi que les informations navigateur/caméra disponibles. Il ne prétend pas mesurer
+l'exactitude: sans vérité terrain, taux exact et CER restent explicitement non calculés. Le format et
+ses limites sont décrits dans [OCR_AUDIT.md](OCR_AUDIT.md). Les noms de fichiers d'origine sont
+remplacés par des identifiants d'échantillon. Les ZIP peuvent être volumineux.
 
-Pour analyser les rapports v1 et v2 placés dans `rapports OCR/`, exécutez localement
+Pour analyser les rapports v1, v2 et v3 placés dans `rapports OCR/`, exécutez localement
 `python analyze_ocr_reports.py`. Un Markdown d'agrégats est créé dans le même dossier; les textes
-reconnus et valeurs attendues ne sont pas recopiés dans cette synthèse. Ce dossier est ignoré par Git.
+reconnus et valeurs attendues ne sont pas recopiés dans cette synthèse. Le script distingue les taux
+annotés des rapports v3 non annotés et compare aussi les mesures automatiques des images. Ce dossier
+est ignoré par Git.
 
 Le rapport et les photos restent en mémoire locale jusqu'à ce que vous choisissiez explicitement le
 partage natif ou le téléchargement. La case de confirmation est obligatoire. Les photos originales

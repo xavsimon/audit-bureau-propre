@@ -1308,7 +1308,7 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
 const OCR_TEST_MAX_IMAGES = 20;
 const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
 const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
-const OCR_TEST_APP_VERSION = '1.32.0';
+const OCR_TEST_APP_VERSION = '1.33.0';
 const OCR_TEST_TESSERACT_VERSION = '5.1.1';
 let ocrTestMode = null;
 let ocrTestItems = [];
@@ -1325,20 +1325,14 @@ const ocrTestRunButton = document.getElementById('runOcrTest');
 const ocrTestShareButton = document.getElementById('shareOcrTestReport');
 const ocrTestConsent = document.getElementById('confirmOcrTestShare');
 const ocrTestCameraPicker = document.getElementById('ocrTestCameraPicker');
-const ocrTestBatchExpected = document.getElementById('ocrTestBatchExpected');
 const ocrTestCameraPopup = document.getElementById('ocrTestCameraPopup');
 const ocrTestCameraVideo = document.getElementById('ocrTestCameraVideo');
 const ocrTestCameraStatus = document.getElementById('ocrTestCameraStatus');
 const ocrTestTakePhotoButton = document.getElementById('takeOcrTestPhoto');
 const ocrTestStopCameraButton = document.getElementById('stopOcrTestCamera');
-const ocrTestExperimentId = document.getElementById('ocrTestExperimentId');
-const ocrTestDeviceModel = document.getElementById('ocrTestDeviceModel');
-const ocrTestCaptureConditions = Object.fromEntries(
-  ['lighting', 'glare', 'focus', 'framing', 'angle'].map((key) => [key, document.getElementById(`ocrTest${key[0].toUpperCase()}${key.slice(1)}`)])
-);
-const ocrTestCaptureNotes = document.getElementById('ocrTestCaptureNotes');
 let ocrTestCameraStream = null;
 let ocrTestCameraBusy = false;
+let ocrTestCameraSettings = null;
 
 function resetOcrTest() {
   stopOcrTestCamera();
@@ -1355,12 +1349,8 @@ function resetOcrTest() {
   ocrTestConsent.checked = false;
   ocrTestRunButton.disabled = true;
   ocrTestShareButton.disabled = true;
-  ocrTestBatchExpected.value = '';
-  ocrTestExperimentId.value = '';
-  ocrTestDeviceModel.value = '';
-  Object.values(ocrTestCaptureConditions).forEach((control) => { control.value = 'unknown'; });
-  ocrTestCaptureNotes.value = '';
-  document.getElementById('runOcrTest').textContent = 'Lancer la batterie';
+  ocrTestCameraSettings = null;
+  document.getElementById('runOcrTest').textContent = 'Analyser les photos';
   updateOcrTestButtons();
 }
 
@@ -1394,12 +1384,6 @@ document.getElementById('cancelOcrTest').addEventListener('click', () => {
 document.getElementById('addOcrTestPhotos').addEventListener('click', openOcrTestCamera);
 ocrTestStopCameraButton.addEventListener('click', stopOcrTestCamera);
 ocrTestTakePhotoButton.addEventListener('click', captureAndTestOcrPhoto);
-ocrTestBatchExpected.addEventListener('input', () => {
-  const expected = ocrTestBatchExpected.value.trim();
-  ocrTestItems.forEach((item) => { item.expected = expected; });
-  invalidateOcrTestResults();
-  updateOcrTestButtons();
-});
 
 function addOcrTestFiles(fileList, source = 'camera-capture') {
   const files = Array.from(fileList || []);
@@ -1418,7 +1402,7 @@ function addOcrTestFiles(fileList, source = 'camera-capture') {
       id: ocrTestNextId++,
       file,
       source,
-      expected: ocrTestBatchExpected.value.trim(),
+      cameraSettings: source === 'live-camera' && ocrTestCameraSettings ? { ...ocrTestCameraSettings } : null,
       previewUrl: URL.createObjectURL(file),
       result: null,
     };
@@ -1441,11 +1425,6 @@ ocrTestCameraPicker.addEventListener('change', () => {
 });
 
 async function openOcrTestCamera() {
-  if (!ocrTestBatchExpected.value.trim()) {
-    ocrTestProgress.textContent = 'Saisissez d’abord la valeur attendue pour cette série.';
-    ocrTestBatchExpected.focus();
-    return;
-  }
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
     ocrTestProgress.textContent = 'Caméra en direct indisponible dans ce contexte. Ouverture de la caméra photo du navigateur.';
     ocrTestCameraPicker.click();
@@ -1467,6 +1446,14 @@ async function openOcrTestCamera() {
       return;
     }
     ocrTestCameraStream = stream;
+    const cameraSettings = stream.getVideoTracks()[0]?.getSettings() || {};
+    ocrTestCameraSettings = {
+      width: cameraSettings.width || null,
+      height: cameraSettings.height || null,
+      aspectRatio: cameraSettings.aspectRatio || null,
+      frameRate: cameraSettings.frameRate || null,
+      facingMode: cameraSettings.facingMode || null,
+    };
     ocrTestCameraVideo.srcObject = stream;
     await ocrTestCameraVideo.play();
     await enterCaptureFullscreen(ocrTestCameraPopup);
@@ -1549,16 +1536,15 @@ function invalidateOcrTestResults() {
   ocrTestItems.forEach((item) => { item.result = null; });
   ocrTestResults.replaceChildren();
   ocrTestResults.hidden = true;
-  if (hadResults) ocrTestProgress.textContent = 'Photo ou valeur attendue modifiée. Relancez la batterie avant de partager.';
+  if (hadResults) ocrTestProgress.textContent = 'Photos modifiées. Relancez l’analyse avant de partager.';
 }
 
 function updateOcrTestButtons() {
-  const allExpectedValuesPresent = ocrTestItems.length > 0
-    && ocrTestItems.every((item) => item.expected.trim());
+  const hasImages = ocrTestItems.length > 0;
   const allResultsPresent = ocrTestItems.length > 0
     && ocrTestItems.every((item) => item.result !== null);
   const cameraActive = Boolean(ocrTestCameraStream) || !ocrTestCameraPopup.hidden;
-  ocrTestRunButton.disabled = ocrTestRunning || ocrTestCameraBusy || cameraActive || !allExpectedValuesPresent;
+  ocrTestRunButton.disabled = ocrTestRunning || ocrTestCameraBusy || cameraActive || !hasImages;
   ocrTestShareButton.disabled = ocrTestRunning || ocrTestCameraBusy || cameraActive || !allResultsPresent
     || !ocrTestConsent.checked;
   document.getElementById('cancelOcrTest').disabled = ocrTestRunning || ocrTestCameraBusy;
@@ -1574,23 +1560,47 @@ function normalizeOcrTestValue(value, mode) {
   return mode === 'asset' ? compact.toUpperCase() : compact.toLocaleLowerCase('fr');
 }
 
-function characterErrorRate(expected, actual) {
-  const left = Array.from(expected);
-  const right = Array.from(actual);
-  if (!left.length) return right.length ? 1 : 0;
-  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= left.length; i += 1) {
-    const current = [i];
-    for (let j = 1; j <= right.length; j += 1) {
-      current[j] = Math.min(
-        current[j - 1] + 1,
-        previous[j] + 1,
-        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1)
-      );
-    }
-    previous = current;
+function measureOcrImageQuality(image) {
+  const maxSide = 256;
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return null;
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const gray = new Uint8Array(canvas.width * canvas.height);
+  let sum = 0;
+  let squaredSum = 0;
+  for (let pixel = 0, offset = 0; pixel < gray.length; pixel += 1, offset += 4) {
+    const luma = Math.round(0.299 * pixels[offset] + 0.587 * pixels[offset + 1] + 0.114 * pixels[offset + 2]);
+    gray[pixel] = luma;
+    sum += luma;
+    squaredSum += luma * luma;
   }
-  return previous[right.length] / left.length;
+  let laplacianSum = 0;
+  let laplacianSquaredSum = 0;
+  let laplacianCount = 0;
+  for (let y = 1; y < canvas.height - 1; y += 1) {
+    for (let x = 1; x < canvas.width - 1; x += 1) {
+      const index = y * canvas.width + x;
+      const laplacian = gray[index - canvas.width] + gray[index - 1] - 4 * gray[index]
+        + gray[index + 1] + gray[index + canvas.width];
+      laplacianSum += laplacian;
+      laplacianSquaredSum += laplacian * laplacian;
+      laplacianCount += 1;
+    }
+  }
+  const count = gray.length;
+  const laplacianMean = laplacianCount ? laplacianSum / laplacianCount : 0;
+  return {
+    analysisWidth: canvas.width,
+    analysisHeight: canvas.height,
+    meanLuma: Number((sum / count / 255).toFixed(4)),
+    contrastStdDev: Number((Math.sqrt(Math.max(0, squaredSum / count - (sum / count) ** 2)) / 255).toFixed(4)),
+    sharpnessLaplacianVariance: Number((Math.max(0, laplacianSquaredSum / Math.max(1, laplacianCount) - laplacianMean ** 2)).toFixed(2)),
+  };
 }
 
 async function testOcrImage(item, index, total) {
@@ -1606,6 +1616,12 @@ async function testOcrImage(item, index, total) {
   const diagnostics = { rotations: [] };
   try {
     const image = await loadImageFile(item.file);
+    let imageQuality;
+    try {
+      imageQuality = measureOcrImageQuality(image);
+    } catch {
+      imageQuality = null;
+    }
     templateState.image = image;
     templateState.rotation = 0;
     templateState.crop = null;
@@ -1623,25 +1639,25 @@ async function testOcrImage(item, index, total) {
       diagnostics
     ));
     const extractedValue = config.extract(recognizedText);
-    const expected = item.expected.trim();
-    const normalizedExpected = normalizeOcrTestValue(expected, ocrTestMode);
     const normalizedActual = normalizeOcrTestValue(extractedValue, ocrTestMode);
     item.result = {
       id: `sample-${String(index + 1).padStart(3, '0')}`,
-      expected,
-      normalizedExpected,
-      recognizedText,
-      extractedValue,
-      normalizedExtractedValue: normalizedActual,
-      exactMatch: normalizedExpected === normalizedActual,
-      characterErrorRate: characterErrorRate(normalizedExpected, normalizedActual),
+      prediction: {
+        recognizedText,
+        extractedValue,
+        normalizedExtractedValue: normalizedActual,
+        confidence: Number.isFinite(diagnostics.refinement?.confidence) ? diagnostics.refinement.confidence : null,
+      },
       elapsedMs: Math.round(performance.now() - startedAt),
       image: {
         source: item.source,
         mimeType: item.file.type || 'application/octet-stream',
         bytes: item.file.size,
+        lastModifiedAt: item.file.lastModified ? new Date(item.file.lastModified).toISOString() : null,
         decodedWidth: image.naturalWidth,
         decodedHeight: image.naturalHeight,
+        cameraSettings: item.cameraSettings,
+        quality: imageQuality,
       },
       diagnostics,
       error: null,
@@ -1649,18 +1665,13 @@ async function testOcrImage(item, index, total) {
   } catch (error) {
     item.result = {
       id: `sample-${String(index + 1).padStart(3, '0')}`,
-      expected: item.expected.trim(),
-      normalizedExpected: normalizeOcrTestValue(item.expected.trim(), ocrTestMode),
-      recognizedText: '',
-      extractedValue: '',
-      normalizedExtractedValue: '',
-      exactMatch: false,
-      characterErrorRate: 1,
+      prediction: { recognizedText: '', extractedValue: '', normalizedExtractedValue: '', confidence: null },
       elapsedMs: Math.round(performance.now() - startedAt),
       image: {
         source: item.source,
         mimeType: item.file.type || 'application/octet-stream',
         bytes: item.file.size,
+        cameraSettings: item.cameraSettings,
       },
       diagnostics,
       error: String(error?.message || error),
@@ -1679,7 +1690,7 @@ function renderOcrTestResults() {
   const table = document.createElement('table');
   const head = document.createElement('thead');
   const header = document.createElement('tr');
-  ['Photo', 'Attendu', 'Reconnu', 'Correspondance', 'Confiance', 'Temps'].forEach((text) => {
+  ['Photo', 'Résultat OCR proposé', 'Confiance', 'Temps'].forEach((text) => {
     const cell = document.createElement('th');
     cell.textContent = text;
     header.append(cell);
@@ -1692,9 +1703,7 @@ function renderOcrTestResults() {
     const confidence = result?.diagnostics?.refinement?.confidence;
     [
       `Photo ${index + 1}`,
-      item.expected,
-      result?.extractedValue || result?.error || 'Aucune valeur',
-      result?.exactMatch ? 'Exacte' : 'Différente',
+      result?.prediction?.extractedValue || result?.error || 'Aucune valeur extraite',
       Number.isFinite(confidence) ? `${Math.round(confidence)} %` : 'N/D',
       result ? `${result.elapsedMs} ms` : 'N/D',
     ].forEach((text) => {
@@ -1727,8 +1736,8 @@ ocrTestRunButton.addEventListener('click', async () => {
       await testOcrImage(ocrTestItems[index], index, ocrTestItems.length);
       renderOcrTestResults();
     }
-    const exactCount = ocrTestItems.filter((item) => item.result?.exactMatch).length;
-    ocrTestProgress.textContent = `Batterie terminée: ${exactCount}/${ocrTestItems.length} valeurs exactes; ${(performance.now() - start).toFixed(0)} ms au total.`;
+    const outputCount = ocrTestItems.filter((item) => item.result?.prediction?.extractedValue).length;
+    ocrTestProgress.textContent = `Analyse terminée: ${outputCount}/${ocrTestItems.length} résultat(s) OCR proposé(s); ${(performance.now() - start).toFixed(0)} ms au total.`;
   } catch (error) {
     ocrTestProgress.textContent = `Batterie interrompue: ${error?.message || error}`;
   } finally {
@@ -1832,8 +1841,28 @@ function ocrTestPhotoExtension(file) {
   return /^[a-z0-9]{1,8}$/.test(extension) ? extension : 'image';
 }
 
-function buildOcrTestReport() {
-  const successes = ocrTestItems.filter((item) => item.result?.exactMatch).length;
+async function getOcrTestDeviceHints() {
+  const userAgentData = navigator.userAgentData;
+  if (!userAgentData) return null;
+  const basicHints = {
+    brands: userAgentData.brands || [],
+    mobile: userAgentData.mobile,
+    platform: userAgentData.platform,
+  };
+  try {
+    const detailedHints = await userAgentData.getHighEntropyValues(['model', 'platformVersion']);
+    return {
+      ...basicHints,
+      model: detailedHints.model || null,
+      platformVersion: detailedHints.platformVersion || null,
+    };
+  } catch {
+    return basicHints;
+  }
+}
+
+async function buildOcrTestReport() {
+  const recognizedCount = ocrTestItems.filter((item) => item.result?.prediction?.extractedValue).length;
   const elapsedTimes = ocrTestItems.map((item) => item.result?.elapsedMs).filter(Number.isFinite).sort((a, b) => a - b);
   const p95Index = Math.max(0, Math.ceil(elapsedTimes.length * 0.95) - 1);
   const middleIndex = Math.floor(elapsedTimes.length / 2);
@@ -1842,14 +1871,14 @@ function buildOcrTestReport() {
       ? elapsedTimes[middleIndex]
       : (elapsedTimes[middleIndex - 1] + elapsedTimes[middleIndex]) / 2
     : null;
+    const userAgentData = await getOcrTestDeviceHints();
   return {
-    schema: 'audit-bureau-propre-ocr-benchmark/v2',
+    schema: 'audit-bureau-propre-ocr-benchmark/v3',
     createdAt: new Date().toISOString(),
-    experimentId: ocrTestExperimentId.value.trim() || null,
     privacy: {
       processing: 'local-browser-only',
       photoPolicy: 'original-photo-bytes-included-in-this-explicitly-shared-archive',
-      warning: 'Photos may contain personal information and EXIF metadata such as location.',
+      warning: 'Photos and OCR predictions may contain personal information; original photo bytes may include EXIF metadata such as location.',
     },
     application: {
       version: OCR_TEST_APP_VERSION,
@@ -1871,6 +1900,7 @@ function buildOcrTestReport() {
       userAgent: navigator.userAgent,
       platform: navigator.platform || null,
       languages: navigator.languages || [],
+      userAgentData,
       hardwareConcurrency: navigator.hardwareConcurrency || null,
       deviceMemoryGiB: navigator.deviceMemory || null,
       screen: { width: screen.width, height: screen.height, pixelRatio: window.devicePixelRatio || 1 },
@@ -1881,17 +1911,15 @@ function buildOcrTestReport() {
     battery: {
       category: ocrTestMode === 'asset' ? 'asset-label' : 'lock-screen-name',
       sampleCount: ocrTestItems.length,
-      captureContext: {
-        deviceModel: ocrTestDeviceModel.value.trim() || null,
-        lighting: ocrTestCaptureConditions.lighting.value,
-        glare: ocrTestCaptureConditions.glare.value,
-        focus: ocrTestCaptureConditions.focus.value,
-        framing: ocrTestCaptureConditions.framing.value,
-        angle: ocrTestCaptureConditions.angle.value,
-        notes: ocrTestCaptureNotes.value.trim() || null,
+      recognizedCount,
+      noOutputCount: ocrTestItems.length - recognizedCount,
+      recognitionYieldRate: ocrTestItems.length ? recognizedCount / ocrTestItems.length : 0,
+      groundTruth: {
+        provided: false,
+        exactMatchRate: null,
+        characterErrorRate: null,
+        note: 'Exactitude et CER non calculés: aucune vérité terrain n’a été saisie.',
       },
-      exactMatches: successes,
-      exactMatchRate: ocrTestItems.length ? successes / ocrTestItems.length : 0,
       medianSampleElapsedMs: medianElapsedMs,
       p95SampleElapsedMs: elapsedTimes.length ? elapsedTimes[p95Index] : null,
       samples: ocrTestItems.map((item, index) => ({
@@ -1900,18 +1928,17 @@ function buildOcrTestReport() {
       })),
     },
     notes: [
-      'Expected values were entered by the operator. Exact match ignores letter case and collapses whitespace; asset values are compared uppercase.',
-      'normalizedExpected and normalizedExtractedValue use the same comparison rule as exactMatch; original values are preserved for CER and review.',
-      'The character error rate is computed on the extracted field value, not the full raw OCR transcription.',
+      'No ground-truth values are collected; recognitionYieldRate means a non-empty extracted value, not an accuracy score.',
+      'Image quality values are local, approximate measurements on a 256-pixel preview; they are diagnostic signals, not pass/fail thresholds.',
       'OCR confidence is Tesseract confidence, not a calibrated probability.',
       'Original images are stored byte-for-byte; filenames are replaced with sample IDs, but EXIF metadata is not removed.',
-      'Capture context is operator-reported and applies to the whole battery; unknown means not recorded.',
+      'Device/browser details and live camera settings are recorded only when the browser exposes them.',
     ],
   };
 }
 
 async function createOcrTestReportFile() {
-  const report = buildOcrTestReport();
+  const report = await buildOcrTestReport();
   const entries = [{
     name: 'report.json',
     blob: new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }),
@@ -1927,7 +1954,7 @@ async function createOcrTestReportFile() {
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
   const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map((part) => String(part).padStart(2, '0')).join('-');
   const category = ocrTestMode === 'asset' ? 'etiquettes' : 'lock-screens';
-  return new File([zip], `rapport_ocr_${category}_${date}_${time}.zip`, { type: 'application/zip' });
+  return new File([zip], `rapport_ocr_v3_${category}_${date}_${time}.zip`, { type: 'application/zip' });
 }
 
 function downloadOcrTestReport(file) {

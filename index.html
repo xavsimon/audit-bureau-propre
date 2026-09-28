@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.32.0&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.33.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.32.0</span>
+  <span class="version-badge">Version 1.33.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -105,45 +105,14 @@
 <div class="audit-modal" id="ocrTestModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ocr-test-title">
   <div class="audit-modal-content ocr-test-content">
     <h2 id="ocr-test-title">Tester la qualité de l'OCR</h2>
-    <p class="ocr-test-warning">Les rapports de batterie contiennent les valeurs attendues et reconnues. Les photos d'écran peuvent montrer des noms ou d'autres données personnelles; les originaux peuvent aussi contenir des métadonnées de localisation. Rien n'est envoyé automatiquement.</p>
+    <p class="ocr-test-warning">Le rapport contient les résultats proposés par l’OCR et les photos originales. Les images ou le texte reconnu peuvent contenir des données personnelles ou EXIF. Rien n’est envoyé automatiquement.</p>
     <div id="ocrTestChoices" class="ocr-test-choices">
-      <button class="btn btn-live" id="startAssetBattery" type="button">Batterie d'étiquettes</button>
-      <button class="btn btn-live" id="startNameBattery" type="button">Batterie de lock screens</button>
+      <button class="btn btn-live" id="startAssetBattery" type="button">Photographier une étiquette</button>
+      <button class="btn btn-live" id="startNameBattery" type="button">Photographier un écran de verrouillage</button>
     </div>
     <div id="ocrTestWorkspace" hidden>
       <h3 class="ocr-test-mode-label" id="ocrTestModeLabel"></h3>
-      <label class="ocr-test-batch-label" for="ocrTestBatchExpected">Valeur attendue pour les prochaines photos</label>
-      <input id="ocrTestBatchExpected" type="text" autocomplete="off" placeholder="Ex. S123456 ou Paul DUGENOU">
-      <fieldset class="ocr-test-context">
-        <legend>Contexte de la batterie (facultatif)</legend>
-        <label for="ocrTestExperimentId">Référence de campagne / variante</label>
-        <input id="ocrTestExperimentId" type="text" maxlength="80" autocomplete="off" placeholder="Ex. baseline-sept-2026">
-        <label for="ocrTestDeviceModel">Modèle du téléphone</label>
-        <input id="ocrTestDeviceModel" type="text" maxlength="80" autocomplete="off" placeholder="Ex. iPhone 13">
-        <label for="ocrTestLighting">Luminosité</label>
-        <select id="ocrTestLighting">
-          <option value="unknown">Non renseignée</option><option value="normal">Normale</option><option value="low">Faible</option><option value="uneven">Inégale / ombres</option><option value="bright">Forte</option>
-        </select>
-        <label for="ocrTestGlare">Reflets</label>
-        <select id="ocrTestGlare">
-          <option value="unknown">Non renseignés</option><option value="none">Aucun</option><option value="mild">Légers</option><option value="strong">Forts</option>
-        </select>
-        <label for="ocrTestFocus">Netteté</label>
-        <select id="ocrTestFocus">
-          <option value="unknown">Non renseignée</option><option value="sharp">Nette</option><option value="slightly-blurred">Légèrement floue</option><option value="blurred">Floue</option>
-        </select>
-        <label for="ocrTestFraming">Cadrage</label>
-        <select id="ocrTestFraming">
-          <option value="unknown">Non renseigné</option><option value="close">Proche</option><option value="readable">Lisible, avec contexte</option><option value="wide">Texte petit / éloigné</option><option value="cut-off">Texte partiellement coupé</option>
-        </select>
-        <label for="ocrTestAngle">Inclinaison</label>
-        <select id="ocrTestAngle">
-          <option value="unknown">Non renseignée</option><option value="straight">De face</option><option value="slight">Légère</option><option value="strong">Forte</option>
-        </select>
-        <label for="ocrTestCaptureNotes">Autre difficulté observée (sans donnée personnelle)</label>
-        <textarea id="ocrTestCaptureNotes" rows="2" maxlength="300" placeholder="Ex. étiquette courbe, écran avec trame"></textarea>
-      </fieldset>
-      <button class="btn btn-live ocr-test-add-photos" id="addOcrTestPhotos" type="button">Ajouter des photos</button>
+      <button class="btn btn-live ocr-test-add-photos" id="addOcrTestPhotos" type="button">Prendre ou ajouter des photos</button>
       <input id="ocrTestCameraPicker" type="file" accept="image/*" capture="environment" hidden>
       <div class="live-scanner ocr-test-camera" id="ocrTestCameraPopup" hidden>
         <video id="ocrTestCameraVideo" class="live-video" playsinline muted aria-label="Aperçu de la caméra"></video>
@@ -159,10 +128,10 @@
       <div id="ocrTestResults" class="ocr-test-results" hidden></div>
       <label class="ocr-test-consent">
         <input id="confirmOcrTestShare" type="checkbox">
-        <span>Je confirme que je peux partager ces photos et valeurs sensibles par le canal choisi.</span>
+        <span>Je confirme que je peux partager ces photos et résultats OCR par le canal choisi.</span>
       </label>
       <div class="modal-actions ocr-test-actions">
-        <button class="btn btn-primary" id="runOcrTest" type="button" disabled>Lancer la batterie</button>
+        <button class="btn btn-primary" id="runOcrTest" type="button" disabled>Analyser les photos</button>
         <button class="btn btn-share" id="shareOcrTestReport" type="button" disabled>Partager le rapport avec les photos</button>
       </div>
       <div class="ocr-test-exit">
@@ -290,8 +259,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.32.0"></script>
-<script src="vendor/xlsx.full.min.js?v=1.32.0"></script>
-<script src="app.js?v=1.32.0"></script>
+<script src="vendor/tesseract.min.js?v=1.33.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.33.0"></script>
+<script src="app.js?v=1.33.0"></script>
 </body>
 </html>
