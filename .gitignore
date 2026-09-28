@@ -5,6 +5,9 @@ personne.jpg
 # Fichiers Excel exportés localement pendant les audits.
 audit_bureau_propre_*.xlsx
 
+# Rapports OCR locaux: photos originales, valeurs attendues et données potentiellement sensibles.
+/rapports OCR/
+
 # Divers
 .DS_Store
 Thumbs.db

@@ -147,3 +147,53 @@ Recommandation actuelle: **Option A d'abord, puis B sur les défauts révélés 
 - Le numéro de version Tesseract.js est identifiable dans le bundle, mais la provenance, le commit, le checksum et la famille exacte des deux fichiers `traineddata` ne sont pas consignés par l'application.
 - Le README annonce 1.17.0 alors que l'interface et les assets portent 1.28.0; ses étapes OCR ne décrivent donc pas de manière fiable le comportement livré.
 - Aucun changement n'a été fait au code applicatif dans cette première livraison.
+
+## 9. Format des rapports de benchmark OCR
+
+Les archives partagées par le mode **Tester la qualité de l'OCR** suivent le schéma
+`audit-bureau-propre-ocr-benchmark/v2`. Une archive ZIP contient `report.json` en UTF-8 et les
+originaux sous `photos/sample-NNN.<ext>`. Le nom d'origine du fichier n'est jamais ajouté au JSON.
+Les rapports v1 restent lisibles par l'analyseur.
+
+### Données enregistrées
+
+| Emplacement | Informations | Utilité |
+| --- | --- | --- |
+| `schema`, `createdAt`, `experimentId` | Version du contrat, date UTC et référence facultative de campagne/variante. | Filtrer et apparier les essais d'un même jeu sans identifiant de personne. Réutiliser la même référence pour les variantes comparables. |
+| `privacy` | Traitement local, inclusion des originaux et avertissement EXIF. | Rendre explicite la sensibilité du partage. |
+| `application` | Version de l'application, Tesseract.js, modèles de langue, moteur, rotations, PSM et paramètres de prétraitement. | Reproduire et comparer le pipeline réellement testé. |
+| `environment` | Navigateur/OS disponibles, langues, mémoire/concurrence si exposées, taille écran/viewport, contexte sécurisé et état réseau. | Identifier des différences de runtime. Certaines propriétés sont absentes selon le navigateur. |
+| `battery.category` | `asset-label` ou `lock-screen-name`. | Séparer les tâches OCR qui n'ont pas les mêmes règles d'extraction. |
+| `battery.captureContext` | Modèle saisi manuellement; luminosité (`unknown`, `normal`, `low`, `uneven`, `bright`); reflets (`unknown`, `none`, `mild`, `strong`); netteté (`unknown`, `sharp`, `slightly-blurred`, `blurred`); cadrage (`unknown`, `close`, `readable`, `wide`, `cut-off`); inclinaison (`unknown`, `straight`, `slight`, `strong`); note facultative limitée à 300 caractères. | Relier les erreurs aux conditions de capture. Le contexte décrit toute la batterie; faire une batterie distincte lorsque les conditions changent. `unknown` signifie non observé, pas absence du défaut. |
+| `battery.samples[]` | Valeur attendue, OCR brut, valeur extraite et normalisée, correspondance exacte, CER, durée, source/type/taille/dimensions image, diagnostics par rotation, détection retenue, relecture et éventuelle erreur. | Mesurer l'exactitude et localiser l'étape/rotation associée aux échecs. Les images restent nécessaires pour diagnostiquer cadrage, reflet ou flou. |
+| `battery` agrégats | Nombre d'échantillons, exactitude, médiane et p95 des durées. | Vue rapide par batterie; l'analyseur recalcule aussi les mesures à partir des échantillons valides. |
+
+### Règles de comparaison
+
+- `exactMatch` ignore la casse et réduit les espaces consécutifs; les assets sont comparés en majuscules et les noms en minuscules françaises. `normalizedExpected` et `normalizedExtractedValue` rendent cette règle vérifiable.
+- `characterErrorRate` utilise la distance de Levenshtein entre les valeurs normalisées (pas le texte brut complet). Il complète le taux de correspondance exacte, sans le remplacer.
+- `elapsedMs` est une durée par image, initialisation OCR exclue; comparer sur le même appareil et distinguer le premier passage si une mesure à froid est nécessaire.
+- La confiance Tesseract n'est pas une probabilité calibrée. Une confiance élevée ne constitue pas une preuve d'exactitude.
+- Pour une comparaison A/B, réutiliser les mêmes images et vérités terrain, et renseigner la même référence de campagne. Ne modifier qu'un paramètre à la fois. Garder les photos hors de Git et ne pas recopier les valeurs personnelles dans les notes d'analyse.
+
+### Analyse locale des archives
+
+Placer les ZIP dans `rapports OCR/`, puis depuis la racine du dépôt exécuter:
+
+```powershell
+python analyze_ocr_reports.py
+```
+
+Le script standard-library lit v1 et v2 sans extraire les photos, vérifie la présence de `report.json`,
+calcule l'exactitude/CER/latence par rapport et catégorie, compare les résultats selon le contexte saisi,
+et rapporte la distribution des rotations retenues et les IDs des échecs. Le fichier Markdown généré
+reste dans `rapports OCR/` (ignoré par Git). Les suggestions sont des pistes d'essai à valider sur les
+photos; les agrégats seuls ne prouvent pas une cause racine.
+
+### À ne pas collecter
+
+Ne pas saisir de nom d'opérateur, d'agence, de salle, de géolocalisation ni d'information personnelle
+dans la référence ou les notes. Les valeurs attendues (notamment les noms) et les pixels/EXIF des photos
+peuvent déjà être sensibles: anonymiser le jeu, obtenir l'autorisation de partage et supprimer les
+métadonnées si elles ne sont pas nécessaires avant toute transmission. Les photos originales sont
+incluses sans modification uniquement après confirmation explicite de l'utilisateur.

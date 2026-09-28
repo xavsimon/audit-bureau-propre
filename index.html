@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.31.1&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.32.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.31.1</span>
+  <span class="version-badge">Version 1.32.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -114,6 +114,35 @@
       <h3 class="ocr-test-mode-label" id="ocrTestModeLabel"></h3>
       <label class="ocr-test-batch-label" for="ocrTestBatchExpected">Valeur attendue pour les prochaines photos</label>
       <input id="ocrTestBatchExpected" type="text" autocomplete="off" placeholder="Ex. S123456 ou Paul DUGENOU">
+      <fieldset class="ocr-test-context">
+        <legend>Contexte de la batterie (facultatif)</legend>
+        <label for="ocrTestExperimentId">Référence de campagne / variante</label>
+        <input id="ocrTestExperimentId" type="text" maxlength="80" autocomplete="off" placeholder="Ex. baseline-sept-2026">
+        <label for="ocrTestDeviceModel">Modèle du téléphone</label>
+        <input id="ocrTestDeviceModel" type="text" maxlength="80" autocomplete="off" placeholder="Ex. iPhone 13">
+        <label for="ocrTestLighting">Luminosité</label>
+        <select id="ocrTestLighting">
+          <option value="unknown">Non renseignée</option><option value="normal">Normale</option><option value="low">Faible</option><option value="uneven">Inégale / ombres</option><option value="bright">Forte</option>
+        </select>
+        <label for="ocrTestGlare">Reflets</label>
+        <select id="ocrTestGlare">
+          <option value="unknown">Non renseignés</option><option value="none">Aucun</option><option value="mild">Légers</option><option value="strong">Forts</option>
+        </select>
+        <label for="ocrTestFocus">Netteté</label>
+        <select id="ocrTestFocus">
+          <option value="unknown">Non renseignée</option><option value="sharp">Nette</option><option value="slightly-blurred">Légèrement floue</option><option value="blurred">Floue</option>
+        </select>
+        <label for="ocrTestFraming">Cadrage</label>
+        <select id="ocrTestFraming">
+          <option value="unknown">Non renseigné</option><option value="close">Proche</option><option value="readable">Lisible, avec contexte</option><option value="wide">Texte petit / éloigné</option><option value="cut-off">Texte partiellement coupé</option>
+        </select>
+        <label for="ocrTestAngle">Inclinaison</label>
+        <select id="ocrTestAngle">
+          <option value="unknown">Non renseignée</option><option value="straight">De face</option><option value="slight">Légère</option><option value="strong">Forte</option>
+        </select>
+        <label for="ocrTestCaptureNotes">Autre difficulté observée (sans donnée personnelle)</label>
+        <textarea id="ocrTestCaptureNotes" rows="2" maxlength="300" placeholder="Ex. étiquette courbe, écran avec trame"></textarea>
+      </fieldset>
       <button class="btn btn-live ocr-test-add-photos" id="addOcrTestPhotos" type="button">Ajouter des photos</button>
       <input id="ocrTestCameraPicker" type="file" accept="image/*" capture="environment" hidden>
       <div class="live-scanner ocr-test-camera" id="ocrTestCameraPopup" hidden>
@@ -261,8 +290,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.31.1"></script>
-<script src="vendor/xlsx.full.min.js?v=1.31.1"></script>
-<script src="app.js?v=1.31.1"></script>
+<script src="vendor/tesseract.min.js?v=1.32.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.32.0"></script>
+<script src="app.js?v=1.32.0"></script>
 </body>
 </html>

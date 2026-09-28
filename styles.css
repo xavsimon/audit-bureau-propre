@@ -504,6 +504,18 @@ textarea {
 .ocr-test-mode-label { margin: 0 0 12px; font-size: 1rem; }
 .ocr-test-batch-label { display: block; margin: 0 0 5px; font-size: 0.84rem; font-weight: 600; }
 #ocrTestBatchExpected { margin-bottom: 10px; }
+.ocr-test-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+}
+.ocr-test-context legend { padding: 0 5px; font-size: 0.84rem; font-weight: 600; }
+.ocr-test-context label { align-self: center; font-size: 0.82rem; }
+.ocr-test-context input, .ocr-test-context select, .ocr-test-context textarea { min-width: 0; margin: 0; }
+.ocr-test-context label[for="ocrTestCaptureNotes"], #ocrTestCaptureNotes { grid-column: 1 / -1; }
 .ocr-test-add-photos { width: 100%; min-height: 48px; margin: 0; }
 .ocr-test-camera { z-index: 1000; }
 .ocr-test-camera .camera-controls .btn { min-width: 0; }
@@ -523,6 +535,10 @@ textarea {
 .ocr-test-remove { width: 40px; height: 40px; padding: 0; color: #9f2f25; background: #fff; border: 1px solid #d6aaa5; }
 .ocr-test-progress { min-height: 1.4em; margin: 8px 0; color: var(--primary-dark); font-size: 0.86rem; }
 .ocr-test-consent { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; font-size: 0.82rem; line-height: 1.4; }
+@media (max-width: 520px) {
+  .ocr-test-context { grid-template-columns: 1fr; }
+  .ocr-test-context label[for="ocrTestCaptureNotes"], #ocrTestCaptureNotes { grid-column: auto; }
+}
 .ocr-test-consent input { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; }
 .ocr-test-results { max-height: 240px; overflow: auto; border: 1px solid var(--border); }
 .ocr-test-results table { min-width: 540px; }

@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.31.1 (OCR + export Excel)
+# Audit Bureau Propre — version 1.32.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -110,11 +110,16 @@ bouton **"Quitter le mode test"** arrête le test; les entrées d'audit ne sont 
 
 Le bouton de partage produit un fichier ZIP nommé `rapport_ocr_<catégorie>_<AAAA-MM-JJ>_<HH-MM-SS>.zip`
 (horodatage local du téléphone), contenant `report.json` et les photos originales, sans
-recompression. Le rapport inclut les valeurs attendues, textes bruts et extraits, correspondances,
-CER, confiances Tesseract, temps, lignes détectées par orientation, coordonnées des zones, dimensions
-décodées, version/configuration OCR et informations navigateur/appareil disponibles. Les noms de
-fichiers d'origine sont remplacés par des identifiants d'échantillon. Les ZIP ne sont pas compressés
-au-delà des photos déjà compressées et peuvent donc être volumineux.
+recompression. Le schéma `audit-bureau-propre-ocr-benchmark/v2` ajoute une référence de campagne et
+le contexte commun de prise de vue (modèle, luminosité, reflets, netteté, cadrage, inclinaison et
+note facultative). Les métriques, résultats OCR, diagnostics par rotation, dimensions, version et
+configuration sont conservés; le détail du format et des valeurs est défini dans [OCR_AUDIT.md](OCR_AUDIT.md).
+Les noms de fichiers d'origine sont remplacés par des identifiants d'échantillon. Les ZIP ne sont pas
+compressés au-delà des photos déjà compressées et peuvent donc être volumineux.
+
+Pour analyser les rapports v1 et v2 placés dans `rapports OCR/`, exécutez localement
+`python analyze_ocr_reports.py`. Un Markdown d'agrégats est créé dans le même dossier; les textes
+reconnus et valeurs attendues ne sont pas recopiés dans cette synthèse. Ce dossier est ignoré par Git.
 
 Le rapport et les photos restent en mémoire locale jusqu'à ce que vous choisissiez explicitement le
 partage natif ou le téléchargement. La case de confirmation est obligatoire. Les photos originales
