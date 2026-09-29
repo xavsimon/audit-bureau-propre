@@ -877,6 +877,7 @@ function clearLiveResult(state, config) {
 function acceptLiveResult(state, config) {
   const value = state.liveResultValue.textContent;
   if (!value) return;
+  document.getElementById(config.fieldId).value = value;
   document.getElementById(config.resultValueId).textContent = value;
   document.getElementById(config.resultId).hidden = false;
   stopLiveScan(state, false);
@@ -1442,7 +1443,7 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
 const OCR_TEST_MAX_IMAGES = 20;
 const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
 const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
-const OCR_TEST_APP_VERSION = '1.34.0';
+const OCR_TEST_APP_VERSION = '1.35.0';
 const OCR_TEST_TESSERACT_VERSION = '5.1.1';
 let ocrTestMode = null;
 let ocrTestItems = [];
