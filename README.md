@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.36.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.37.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -98,11 +98,14 @@ Deux façons simples de faire cela, au choix :
 8. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
   feuille de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé
   et peut être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
-9. Le bouton **"Envoyer les éléments pour améliorer l'application"** crée un ZIP avec chaque photo
+9. Le bouton **"Envoyer les éléments pour améliorer l'application"** n'est activé qu'après l'export
+  du fichier d'audit actuel. Si vous modifiez les compteurs ou les listes, exportez à nouveau avant
+  de pouvoir envoyer le ZIP.
+10. Le bouton d'envoi crée un ZIP avec chaque photo
   prise pendant un scan réel, son résultat OCR, ses diagnostics et les informations de contexte.
   Après confirmation, choisissez vous-même le canal de partage dans la feuille native. Un partage
   réussi supprime ensuite toutes les données locales, y compris la liste et les compteurs.
-10. **"Vider la liste"** supprime aussi les photos et résultats conservés localement.
+11. **"Vider la liste"** supprime aussi les photos et résultats conservés localement.
 
 ## Envoi des scans
 
@@ -114,6 +117,8 @@ scan, les dimensions, les réglages caméra disponibles et les informations navi
 
 Le ZIP `amelioration_audit_bureau_propre_<date>_<heure>.zip` contient `report.json` et les photos
 associées sous `photos/`. Il est préparé localement; l'application ne l'envoie à aucun serveur.
+Il faut d'abord exporter le fichier d'audit correspondant aux données actuelles; toute modification
+des compteurs ou listes invalide cet export et bloque le bouton jusqu'au prochain export réussi.
 Vous devez confirmer l'avertissement de confidentialité puis sélectionner une destination dans le
 partage natif. Si cette fonction n'est pas disponible, le ZIP est téléchargé et les données restent
 sur l'appareil jusqu'à leur partage manuel ou au clic sur **"Vider la liste"**. En cas d'annulation,

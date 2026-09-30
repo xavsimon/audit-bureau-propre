@@ -7,10 +7,11 @@
  */
 
 const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
+const AUDIT_EXPORT_SIGNATURE_KEY = 'audit-bureau-propre-export-signature-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
-const APP_VERSION = '1.36.0';
+const APP_VERSION = '1.37.0';
 const TESSERACT_VERSION = '5.1.1';
 const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
 const SCAN_EVIDENCE_STORE_NAME = 'captures';
@@ -918,7 +919,8 @@ function updateScanEvidenceStatus() {
   const button = document.getElementById('sendScanEvidence');
   const status = document.getElementById('scanEvidenceStatus');
   if (!button || !status) return;
-  button.disabled = scanEvidenceBusy || scanEvidenceRecords.length === 0;
+  const hasCurrentAuditExport = isCurrentAuditExportAvailable();
+  button.disabled = scanEvidenceBusy || scanEvidenceRecords.length === 0 || !hasCurrentAuditExport;
   if (scanEvidenceNotice) {
     status.textContent = scanEvidenceNotice;
     return;
@@ -928,9 +930,13 @@ function updateScanEvidenceStatus() {
   const summary = photoCount
     ? `${photoCount} photo(s) et leurs résultats conservés sur cet appareil (${(photoBytes / 1024 / 1024).toFixed(1)} Mio).`
     : 'Aucune photo de scan enregistrée.';
-  status.textContent = scanEvidenceStorageError
-    ? `${summary} Attention : stockage local incomplet (${scanEvidenceStorageError}).`
-    : summary;
+  const exportReminder = photoCount && !hasCurrentAuditExport
+    ? ' Exportez d’abord le fichier d’audit pour activer l’envoi.'
+    : '';
+  const storageWarning = scanEvidenceStorageError
+    ? ` Attention : stockage local incomplet (${scanEvidenceStorageError}).`
+    : '';
+  status.textContent = `${summary}${exportReminder}${storageWarning}`;
 }
 
 function imageToScanBlob(image, originalBlob) {
@@ -1409,6 +1415,7 @@ function renderAuditCounters() {
   document.getElementById('totalSeenCount').textContent = totalSeen;
   document.getElementById('securedRate').textContent = `${securedRate} %`;
   document.getElementById('unsecuredRate').textContent = `${unsecuredRate} %`;
+  updateScanEvidenceStatus();
 }
 
 function changeAuditCounter(counter, amount) {
@@ -1619,6 +1626,7 @@ async function resetAuditData() {
   otherComments = [];
   editingUnsecuredIndex = null;
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(AUDIT_EXPORT_SIGNATURE_KEY);
   localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
   localStorage.removeItem(UNSECURED_ENTRIES_STORAGE_KEY);
   localStorage.removeItem(OTHER_COMMENTS_STORAGE_KEY);
@@ -1692,12 +1700,27 @@ function getExportFile() {
   });
 }
 
+function getAuditExportSignature() {
+  return JSON.stringify({ entries, auditStats, unsecuredEntries, otherComments });
+}
+
+function isCurrentAuditExportAvailable() {
+  return localStorage.getItem(AUDIT_EXPORT_SIGNATURE_KEY) === getAuditExportSignature();
+}
+
+function markCurrentAuditAsExported() {
+  localStorage.setItem(AUDIT_EXPORT_SIGNATURE_KEY, getAuditExportSignature());
+  scanEvidenceNotice = '';
+  updateScanEvidenceStatus();
+}
+
 function downloadExportFile(file) {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(file);
   link.download = file.name;
   link.click();
   URL.revokeObjectURL(link.href);
+  markCurrentAuditAsExported();
 }
 
 function ensureEntriesForExport() {
@@ -1723,6 +1746,7 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
       text: 'Export Excel de l’audit bureau propre',
       files: [file],
     });
+    markCurrentAuditAsExported();
   } catch (e) {
     if (e.name !== 'AbortError') {
       downloadExportFile(file);
@@ -1987,6 +2011,11 @@ function downloadScanEvidenceZip(file) {
 
 document.getElementById('sendScanEvidence').addEventListener('click', async () => {
   if (scanEvidenceBusy || !scanEvidenceRecords.length) return;
+  if (!isCurrentAuditExportAvailable()) {
+    alert('Exportez le fichier d’audit avant d’envoyer le ZIP.');
+    updateScanEvidenceStatus();
+    return;
+  }
   if (assetState.liveBusy || nameState.liveBusy || assetState.liveActive || nameState.liveActive) {
     alert('Terminez ou arrêtez les scans en cours avant de préparer le partage.');
     return;
