@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.35.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.36.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -14,8 +14,10 @@ n'est nécessaire en usage normal.
   fichiers de langue (`lang/`) sont embarqués localement, ils ne sont pas téléchargés depuis un CDN.
 - La liste des PC non attachés est stockée uniquement dans le stockage local du téléphone
   (`localStorage`), jamais transmise.
-- Seuls les fichiers que vous générez volontairement sortent de l'application: l'Excel d'audit ou le
-  ZIP du test OCR avec les photos originales. Vous choisissez ensuite le canal de partage.
+- Les photos et résultats de chaque scan réel sont conservés dans IndexedDB sur l'appareil jusqu'au
+  partage réussi des éléments d'amélioration ou au vidage de la liste.
+- L'Excel et le ZIP ne quittent l'appareil qu'après une action explicite; le ZIP contient les photos
+  originales et peut inclure des données personnelles, du contenu d'écran ou des métadonnées EXIF.
 
 ## Pourquoi il faut "servir" l'application (ne pas juste double-cliquer sur index.html)
 
@@ -96,50 +98,36 @@ Deux façons simples de faire cela, au choix :
 8. En fin de tournée, cliquez sur **"Exporter le fichier"** puis choisissez OneDrive dans la
   feuille de partage native. Si le partage natif n'est pas disponible, le fichier est téléchargé
   et peut être ouvert ou partagé vers OneDrive depuis l'application Fichiers.
-9. Le bouton "Vider la liste" efface définitivement les entrées et toutes les informations du PC
-  stockées sur l'appareil (à utiliser une fois l'export récupéré).
+9. Le bouton **"Envoyer les éléments pour améliorer l'application"** crée un ZIP avec chaque photo
+  prise pendant un scan réel, son résultat OCR, ses diagnostics et les informations de contexte.
+  Après confirmation, choisissez vous-même le canal de partage dans la feuille native. Un partage
+  réussi supprime ensuite toutes les données locales, y compris la liste et les compteurs.
+10. **"Vider la liste"** supprime aussi les photos et résultats conservés localement.
 
-## Tester la qualité de l'OCR
+## Envoi des scans
 
-En bas de l'écran, ouvrez **"Tester la qualité de l'OCR"**, choisissez **"Photographier une étiquette"**
-ou **"Photographier un écran de verrouillage"**, puis prenez les photos. Cliquez sur **"Analyser les
-photos"** pour obtenir la valeur que le pipeline normal aurait proposée, puis sur **"Partager le rapport
-avec les photos"**. Aucune valeur attendue, condition de capture ou référence n'est à saisir. Le bouton
-**"Quitter le mode test"** arrête le test; les entrées d'audit ne sont jamais modifiées.
+Chaque tentative réelle est enregistrée avant le démarrage de l'OCR, y compris les captures sans
+valeur extraite, les suggestions incertaines, les erreurs et les analyses interrompues. Les images
+sont gardées sans recompression dans IndexedDB; les diagnostics incluent les lignes détectées par
+orientation, les scores, les recadrages, les niveaux de confiance, les reprises, la durée, le type de
+scan, les dimensions, les réglages caméra disponibles et les informations navigateur.
 
-Le bouton de partage produit un fichier ZIP nommé `rapport_ocr_v3_<catégorie>_<AAAA-MM-JJ>_<HH-MM-SS>.zip`
-(horodatage local du téléphone), contenant `report.json` et les photos originales, sans
-recompression. Le schéma `audit-bureau-propre-ocr-benchmark/v3` enregistre le texte OCR brut, la valeur
-extraite, les diagnostics, les dimensions et des mesures automatiques de luminosité, contraste et
-netteté, ainsi que les informations navigateur/caméra disponibles. Il ne prétend pas mesurer
-l'exactitude: sans vérité terrain, taux exact et CER restent explicitement non calculés. Le format et
-ses limites sont décrits dans [OCR_AUDIT.md](OCR_AUDIT.md). Les noms de fichiers d'origine sont
-remplacés par des identifiants d'échantillon. Les ZIP peuvent être volumineux.
-
-Pour analyser les rapports v1, v2 et v3 placés dans `rapports OCR/`, exécutez localement
-`python analyze_ocr_reports.py`. Un Markdown d'agrégats est créé dans le même dossier; les textes
-reconnus et valeurs attendues ne sont pas recopiés dans cette synthèse. Le script distingue les taux
-annotés des rapports v3 non annotés et compare aussi les mesures automatiques des images. Ce dossier
-est ignoré par Git.
-
-Le rapport et les photos restent en mémoire locale jusqu'à ce que vous choisissiez explicitement le
-partage natif ou le téléchargement. La case de confirmation est obligatoire. Les photos originales
-peuvent contenir des noms, du contenu d'écran ou des métadonnées EXIF, y compris une localisation:
-vérifiez les images et choisissez un canal autorisé avant l'envoi. Aucun rapport n'est envoyé à
-l'application ou automatiquement sur Internet. Si le partage natif n'est pas disponible, le ZIP est
-téléchargé pour être partagé manuellement. Limites par batterie: 20 photos, 15 Mio par photo et
-100 Mio au total.
+Le ZIP `amelioration_audit_bureau_propre_<date>_<heure>.zip` contient `report.json` et les photos
+associées sous `photos/`. Il est préparé localement; l'application ne l'envoie à aucun serveur.
+Vous devez confirmer l'avertissement de confidentialité puis sélectionner une destination dans le
+partage natif. Si cette fonction n'est pas disponible, le ZIP est téléchargé et les données restent
+sur l'appareil jusqu'à leur partage manuel ou au clic sur **"Vider la liste"**. En cas d'annulation,
+les données restent également disponibles pour un nouvel essai.
 
 ## Structure du dossier
 
 ```
 index.html        page principale
 styles.css        mise en forme
-app.js            logique de l'application (OCR, extraction, liste, export et benchmark)
+app.js            logique de l'application (OCR, extraction, liste, export et archive des scans)
 server.js         petit serveur local sans dépendance (voir Option A)
 vendor/           Tesseract.js + moteur OCR (WASM) + SheetJS, en local
 lang/             données de langue Tesseract (eng + fra), en local
-OCR_AUDIT.md      audit initial et protocole d'évaluation OCR
 ```
 
 ## Limites connues

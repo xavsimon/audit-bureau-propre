@@ -10,6 +10,21 @@ const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
+const APP_VERSION = '1.36.0';
+const TESSERACT_VERSION = '5.1.1';
+const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
+const SCAN_EVIDENCE_STORE_NAME = 'captures';
+let scanEvidenceRecords = [];
+let scanEvidenceDbPromise = null;
+let scanEvidenceReadyPromise = Promise.resolve();
+let scanEvidenceStorageError = '';
+let scanEvidenceUnpersistedIds = new Set();
+let scanEvidenceNotice = '';
+let scanEvidenceBusy = false;
+let scanEvidenceClearing = false;
+let activeScanAnalysisCount = 0;
+let scanAnalysisIdleResolver = null;
+let scanEvidenceWriteQueue = Promise.resolve();
 
 // ---------- Etat des deux zones de capture (asset / nom) ----------
 function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId, ocrLoadingId, scanProgressId) {
@@ -39,6 +54,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveBusy: false,
     scanReady: false,
     liveSaved: null,
+    currentEvidenceId: null,
     ocrReady: false,
     analysisGeneration: 0,
   };
@@ -260,7 +276,7 @@ function wireCapture(state) {
     if (!file) return;
     try {
       const image = await loadImageFile(file);
-      await analyzeCapturedImage(state, getLiveConfig(state), image, false);
+      await analyzeCapturedImage(state, getLiveConfig(state), image, false, file);
     } catch (e) {
       document.getElementById(getLiveConfig(state).progressId).textContent = 'Photo impossible à lire.';
     }
@@ -830,6 +846,174 @@ function loadImageFile(file) {
   });
 }
 
+function openScanEvidenceDatabase() {
+  if (!window.indexedDB) return Promise.reject(new Error('IndexedDB indisponible'));
+  if (!scanEvidenceDbPromise) {
+    scanEvidenceDbPromise = new Promise((resolve, reject) => {
+      const request = window.indexedDB.open(SCAN_EVIDENCE_DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains(SCAN_EVIDENCE_STORE_NAME)) {
+          request.result.createObjectStore(SCAN_EVIDENCE_STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('Ouverture du stockage local impossible'));
+    }).catch((error) => {
+      scanEvidenceDbPromise = null;
+      throw error;
+    });
+  }
+  return scanEvidenceDbPromise;
+}
+
+function getAllScanEvidence(db) {
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(SCAN_EVIDENCE_STORE_NAME, 'readonly')
+      .objectStore(SCAN_EVIDENCE_STORE_NAME).getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error || new Error('Lecture des scans impossible'));
+  });
+}
+
+function persistScanEvidenceRecord(record) {
+  const write = scanEvidenceWriteQueue.then(() => openScanEvidenceDatabase()).then((db) => new Promise((resolve, reject) => {
+    const transaction = db.transaction(SCAN_EVIDENCE_STORE_NAME, 'readwrite');
+    transaction.objectStore(SCAN_EVIDENCE_STORE_NAME).put(record);
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = () => reject(transaction.error || new Error('Enregistrement du scan impossible'));
+    transaction.onabort = () => reject(transaction.error || new Error('Enregistrement du scan annulé'));
+  })).then(() => {
+    scanEvidenceUnpersistedIds.delete(record.id);
+    if (!scanEvidenceUnpersistedIds.size) scanEvidenceStorageError = '';
+    return true;
+  }).catch((error) => {
+    scanEvidenceUnpersistedIds.add(record.id);
+    scanEvidenceStorageError = String(error?.message || error);
+    updateScanEvidenceStatus();
+    return false;
+  });
+  scanEvidenceWriteQueue = write.then(() => undefined);
+  return write;
+}
+
+async function initializeScanEvidence() {
+  try {
+    const db = await openScanEvidenceDatabase();
+    scanEvidenceRecords = await getAllScanEvidence(db);
+    scanEvidenceUnpersistedIds = new Set();
+    for (const record of scanEvidenceRecords) {
+      if (record.status !== 'processing') continue;
+      record.status = 'interrupted';
+      record.error = 'L’application a été fermée avant la fin de cette analyse.';
+      // eslint-disable-next-line no-await-in-loop
+      await persistScanEvidenceRecord(record);
+    }
+  } catch (error) {
+    scanEvidenceStorageError = String(error?.message || error);
+  }
+  updateScanEvidenceStatus();
+}
+
+function updateScanEvidenceStatus() {
+  const button = document.getElementById('sendScanEvidence');
+  const status = document.getElementById('scanEvidenceStatus');
+  if (!button || !status) return;
+  button.disabled = scanEvidenceBusy || scanEvidenceRecords.length === 0;
+  if (scanEvidenceNotice) {
+    status.textContent = scanEvidenceNotice;
+    return;
+  }
+  const photoCount = scanEvidenceRecords.length;
+  const photoBytes = scanEvidenceRecords.reduce((sum, record) => sum + (record.photoBlob?.size || 0), 0);
+  const summary = photoCount
+    ? `${photoCount} photo(s) et leurs résultats conservés sur cet appareil (${(photoBytes / 1024 / 1024).toFixed(1)} Mio).`
+    : 'Aucune photo de scan enregistrée.';
+  status.textContent = scanEvidenceStorageError
+    ? `${summary} Attention : stockage local incomplet (${scanEvidenceStorageError}).`
+    : summary;
+}
+
+function imageToScanBlob(image, originalBlob) {
+  if (originalBlob instanceof Blob) return Promise.resolve(originalBlob);
+  if (typeof image.toBlob !== 'function') return Promise.reject(new Error('Format photo non pris en charge'));
+  return new Promise((resolve, reject) => {
+    image.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Création de la photo impossible'));
+    }, 'image/jpeg', 0.94);
+  });
+}
+
+async function startScanEvidenceRecord(state, config, image, liveCapture, originalBlob, imageQuality) {
+  await scanEvidenceReadyPromise;
+  let photoBlob = null;
+  let photoError = '';
+  try {
+    photoBlob = await imageToScanBlob(image, originalBlob);
+  } catch (error) {
+    photoError = String(error?.message || error);
+  }
+  const dimensions = getImageDimensions(image);
+  const id = window.crypto?.randomUUID?.() || `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const cameraTrack = state.liveStream?.getVideoTracks?.()[0];
+  const cameraSettings = liveCapture ? cameraTrack?.getSettings?.() || null : null;
+  const record = {
+    id,
+    capturedAt: new Date().toISOString(),
+    scanType: config.isName ? 'lock-screen-name' : 'asset-label',
+    source: liveCapture ? 'live-camera' : originalBlob ? 'camera-photo-picker' : 'image-input',
+    status: 'processing',
+    photoBlob,
+    photoError,
+    image: {
+      mimeType: photoBlob?.type || 'application/octet-stream',
+      bytes: photoBlob?.size || 0,
+      width: dimensions.width || null,
+      height: dimensions.height || null,
+      quality: imageQuality,
+    },
+    cameraSettings,
+    recognizedText: '',
+    extractedValue: '',
+    confirmedValue: null,
+    confirmedAt: null,
+    uncertain: null,
+    confidence: null,
+    elapsedMs: null,
+    diagnostics: { attempts: [] },
+    error: photoError || null,
+  };
+  scanEvidenceRecords.push(record);
+  state.currentEvidenceId = id;
+  scanEvidenceNotice = '';
+  await persistScanEvidenceRecord(record);
+  updateScanEvidenceStatus();
+  return record;
+}
+
+async function clearScanEvidenceRecords() {
+  await scanEvidenceWriteQueue;
+  if (window.indexedDB) {
+    const db = await openScanEvidenceDatabase();
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction(SCAN_EVIDENCE_STORE_NAME, 'readwrite');
+      transaction.objectStore(SCAN_EVIDENCE_STORE_NAME).clear();
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error || new Error('Suppression des scans impossible'));
+      transaction.onabort = () => reject(transaction.error || new Error('Suppression des scans annulée'));
+    });
+  }
+  scanEvidenceRecords = [];
+  scanEvidenceStorageError = '';
+  scanEvidenceUnpersistedIds.clear();
+  updateScanEvidenceStatus();
+}
+
+function waitForActiveScanAnalyses() {
+  if (!activeScanAnalysisCount) return Promise.resolve();
+  return new Promise((resolve) => { scanAnalysisIdleResolver = resolve; });
+}
+
 function flashScanSuccess() {
   document.body.classList.remove('scan-success-flash');
   document.body.classList.remove('scan-failure-flash');
@@ -878,6 +1062,12 @@ function acceptLiveResult(state, config) {
   const value = state.liveResultValue.textContent;
   if (!value) return;
   document.getElementById(config.fieldId).value = value;
+  const evidence = scanEvidenceRecords.find((record) => record.id === state.currentEvidenceId);
+  if (evidence) {
+    evidence.confirmedValue = value;
+    evidence.confirmedAt = new Date().toISOString();
+    void persistScanEvidenceRecord(evidence);
+  }
   document.getElementById(config.resultValueId).textContent = value;
   document.getElementById(config.resultId).hidden = false;
   stopLiveScan(state, false);
@@ -897,29 +1087,49 @@ function resetScanVerification(state, config) {
   state.crop = null;
 }
 
-async function analyzeCapturedImage(state, config, image, liveCapture) {
-  if ((liveCapture && !state.liveActive) || (state.liveBusy && state !== assetState)) return;
+async function analyzeCapturedImage(state, config, image, liveCapture, originalBlob = null) {
+  if (scanEvidenceClearing || (liveCapture && !state.liveActive) || (state.liveBusy && state !== assetState)) return;
   if (state.liveBusy && state === assetState) resetScanVerification(state, config);
+  activeScanAnalysisCount += 1;
   const analysisGeneration = ++state.analysisGeneration;
   state.liveBusy = true;
   state.liveBtn.disabled = true;
   const progressEl = document.getElementById(config.progressId);
   const statusEl = liveCapture ? state.liveStatus : progressEl;
   let lowSharpness = false;
-  if (config.isName) {
-    try {
-      const quality = measureOcrImageQuality(image);
-      lowSharpness = quality?.sharpnessLaplacianVariance < NAME_LOW_SHARPNESS_VARIANCE;
-    } catch (e) {
-      lowSharpness = false;
-    }
-  }
+  let imageQuality = null;
   try {
-    if (!await prepareOcr(state)) {
-      statusEl.textContent = 'OCR indisponible. Réessayez.';
+    imageQuality = measureOcrImageQuality(image);
+    lowSharpness = config.isName
+      && imageQuality?.sharpnessLaplacianVariance < NAME_LOW_SHARPNESS_VARIANCE;
+  } catch (e) {
+    lowSharpness = false;
+  }
+  const startedAt = performance.now();
+  const diagnostics = { attempts: [] };
+  let evidenceRecord = null;
+  let evidenceStatus = 'error';
+  let recognizedText = '';
+  let extractedValue = '';
+  let uncertainResult = null;
+  let confidence = null;
+  let evidenceError = '';
+  try {
+    evidenceRecord = await startScanEvidenceRecord(state, config, image, liveCapture, originalBlob, imageQuality);
+    if (analysisGeneration !== state.analysisGeneration || (liveCapture && !state.liveActive)) {
+      evidenceStatus = 'interrupted';
       return;
     }
-    if (analysisGeneration !== state.analysisGeneration) return;
+    if (!await prepareOcr(state)) {
+      statusEl.textContent = 'OCR indisponible. Réessayez.';
+      evidenceStatus = 'engine-unavailable';
+      evidenceError = 'Le moteur OCR n’a pas pu être initialisé.';
+      return;
+    }
+    if (analysisGeneration !== state.analysisGeneration || (liveCapture && !state.liveActive)) {
+      evidenceStatus = 'interrupted';
+      return;
+    }
     const reportProgress = (percent, message) => {
       if (analysisGeneration === state.analysisGeneration) {
         updateScanProgress(state, config, liveCapture, percent, message);
@@ -931,7 +1141,9 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
     state.crop = null;
     state.image = image;
     renderPreview(state);
-    const text = await withOcrLock(async () => {
+    recognizedText = await withOcrLock(async () => {
+      const standardAttempt = { preprocessing: 'standard', rotations: [] };
+      diagnostics.attempts.push(standardAttempt);
       let recognizedText = await autoRecognize(
         state,
         config.score,
@@ -940,9 +1152,12 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
         () => analysisGeneration === state.analysisGeneration,
         'standard',
         0,
-        !config.retryPreprocess
+        !config.retryPreprocess,
+        standardAttempt
       );
       if (config.retryPreprocess && !config.extract(recognizedText)) {
+        const adaptiveAttempt = { preprocessing: 'adaptive', rotations: [] };
+        diagnostics.attempts.push(adaptiveAttempt);
         recognizedText = await autoRecognize(
           state,
           config.score,
@@ -950,16 +1165,27 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
           reportProgress,
           () => analysisGeneration === state.analysisGeneration,
           'adaptive',
-          80
+          80,
+          true,
+          adaptiveAttempt
         );
       }
       return recognizedText;
     });
-    if (analysisGeneration !== state.analysisGeneration) return;
-    if (liveCapture && !state.liveActive) return;
-    const value = config.extract(text);
+    if (analysisGeneration !== state.analysisGeneration || (liveCapture && !state.liveActive)) {
+      evidenceStatus = 'interrupted';
+      return;
+    }
+    const value = config.extract(recognizedText);
+    extractedValue = value;
+    const finalAttempt = diagnostics.attempts[diagnostics.attempts.length - 1];
+    confidence = Number.isFinite(finalAttempt?.refinement?.confidence)
+      ? finalAttempt.refinement.confidence
+      : null;
     if (value) {
       const uncertain = Boolean(config.isUncertain?.(value));
+      uncertainResult = uncertain;
+      evidenceStatus = uncertain ? 'value-uncertain' : 'value-found';
       const qualityNote = lowSharpness
         ? 'Image peu nette : stabilisez le téléphone et rapprochez-vous, ou vérifiez la suggestion.'
         : '';
@@ -985,6 +1211,7 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
       }
       flashScanSuccess();
     } else {
+      evidenceStatus = 'no-value';
       const advice = lowSharpness
         ? ' Image peu nette : stabilisez le téléphone et rapprochez-vous.'
         : '';
@@ -996,6 +1223,7 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
       else flashScanFailure();
     }
   } catch (e) {
+    evidenceError = String(e?.message || e);
     if (analysisGeneration === state.analysisGeneration && (!liveCapture || state.liveActive)) {
       const message = liveCapture
         ? 'Lecture impossible. Touchez l\'image pour réessayer.'
@@ -1005,9 +1233,27 @@ async function analyzeCapturedImage(state, config, image, liveCapture) {
       else flashScanFailure();
     }
   } finally {
+    if (evidenceRecord) {
+      evidenceRecord.status = evidenceStatus;
+      evidenceRecord.recognizedText = recognizedText;
+      evidenceRecord.extractedValue = extractedValue;
+      evidenceRecord.uncertain = uncertainResult;
+      evidenceRecord.confidence = confidence;
+      evidenceRecord.elapsedMs = Math.round(performance.now() - startedAt);
+      evidenceRecord.finishedAt = new Date().toISOString();
+      evidenceRecord.diagnostics = diagnostics;
+      evidenceRecord.error = evidenceError || evidenceRecord.photoError || null;
+      await persistScanEvidenceRecord(evidenceRecord);
+      updateScanEvidenceStatus();
+    }
     if (analysisGeneration === state.analysisGeneration) {
       state.liveBusy = false;
       updateCaptureButtons(state);
+    }
+    activeScanAnalysisCount -= 1;
+    if (!activeScanAnalysisCount && scanAnalysisIdleResolver) {
+      scanAnalysisIdleResolver();
+      scanAnalysisIdleResolver = null;
     }
   }
 }
@@ -1192,13 +1438,20 @@ function closeAuditModal(id) {
 }
 
 function prepareModalCapture(state) {
+  if (scanEvidenceBusy || scanEvidenceClearing) {
+    alert('Attendez la fin du partage ou du vidage avant de démarrer un nouveau scan.');
+    return;
+  }
   const config = getLiveConfig(state);
+  state.currentEvidenceId = null;
   clearLiveResult(state, config);
   document.getElementById(config.fieldId).value = '';
   state.liveBtn.click();
 }
 
 function resetUnsecuredModal() {
+  assetState.currentEvidenceId = null;
+  nameState.currentEvidenceId = null;
   document.getElementById('unsecuredAsset').value = '';
   document.getElementById('unsecuredName').value = '';
   document.getElementById('unsecuredComment').value = '';
@@ -1239,6 +1492,13 @@ document.getElementById('confirmUnsecured').addEventListener('click', () => {
     alert('Renseignez au moins une information pour ce PC.');
     return;
   }
+  [[assetState, asset], [nameState, nom]].forEach(([state, value]) => {
+    const evidence = scanEvidenceRecords.find((record) => record.id === state.currentEvidenceId);
+    if (!evidence) return;
+    evidence.confirmedValue = value || null;
+    evidence.confirmedAt = new Date().toISOString();
+    void persistScanEvidenceRecord(evidence);
+  });
   if (editingUnsecuredIndex === null) {
     const now = new Date();
     unsecuredEntries.push({
@@ -1332,14 +1592,27 @@ document.querySelector('#entryTable tbody').addEventListener('click', (event) =>
   renderTable();
 });
 
-document.getElementById('clearAll').addEventListener('click', () => {
+document.getElementById('clearAll').addEventListener('click', async () => {
+  await scanEvidenceReadyPromise;
   const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator
-    || unsecuredEntries.length || otherComments.length;
+    || unsecuredEntries.length || otherComments.length || scanEvidenceRecords.length;
   if (hasAuditData && !confirm('Supprimer définitivement toutes les entrées et remettre les compteurs à zéro ?')) return;
-  resetAuditData();
+  try {
+    await resetAuditData();
+  } catch (error) {
+    alert(`Suppression incomplète des données locales : ${error?.message || error}`);
+  }
 });
 
-function resetAuditData() {
+async function resetAuditData() {
+  scanEvidenceClearing = true;
+  try {
+    await Promise.all([stopLiveScan(assetState, false), stopLiveScan(nameState, false)]);
+    await waitForActiveScanAnalyses();
+    await clearScanEvidenceRecords();
+  } finally {
+    scanEvidenceClearing = false;
+  }
   entries = [];
   auditStats = { secured: 0, unsecuredWithCollaborator: 0 };
   unsecuredEntries = [];
@@ -1349,12 +1622,31 @@ function resetAuditData() {
   localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
   localStorage.removeItem(UNSECURED_ENTRIES_STORAGE_KEY);
   localStorage.removeItem(OTHER_COMMENTS_STORAGE_KEY);
+  [assetState, nameState].forEach((state) => {
+    const config = getLiveConfig(state);
+    state.image = null;
+    state.rotation = 0;
+    state.invert = false;
+    state.crop = null;
+    state.liveSaved = null;
+    state.currentEvidenceId = null;
+    state.liveResultValue.textContent = '';
+    state.liveResult.hidden = true;
+    state.liveResult.classList.remove('scan-result-uncertain');
+    state.canvas.getContext('2d')?.clearRect(0, 0, state.canvas.width, state.canvas.height);
+    clearLiveResult(state, config);
+    document.getElementById(config.fieldId).value = '';
+    document.getElementById(config.resultId).hidden = true;
+    document.getElementById(config.resultValueId).textContent = '';
+  });
   resetUnsecuredModal();
   document.getElementById('otherComment').value = '';
   closeAuditModal('unsecuredModal');
   closeAuditModal('otherModal');
   renderAuditCounters();
   renderTable();
+  scanEvidenceNotice = 'La liste, les photos et les résultats OCR ont été supprimés de cet appareil.';
+  updateScanEvidenceStatus();
 }
 
 function buildExportWorkbook() {
@@ -1439,268 +1731,14 @@ document.getElementById('shareOneDrive').addEventListener('click', async () => {
   }
 });
 
-// ---------- Batterie locale de qualité OCR ----------
-const OCR_TEST_MAX_IMAGES = 20;
-const OCR_TEST_MAX_FILE_BYTES = 15 * 1024 * 1024;
-const OCR_TEST_MAX_TOTAL_BYTES = 100 * 1024 * 1024;
-const OCR_TEST_APP_VERSION = '1.35.0';
-const OCR_TEST_TESSERACT_VERSION = '5.1.1';
-let ocrTestMode = null;
-let ocrTestItems = [];
-let ocrTestRunning = false;
-let ocrTestNextId = 1;
-
-const ocrTestModal = document.getElementById('ocrTestModal');
-const ocrTestChoices = document.getElementById('ocrTestChoices');
-const ocrTestWorkspace = document.getElementById('ocrTestWorkspace');
-const ocrTestImageList = document.getElementById('ocrTestImageList');
-const ocrTestProgress = document.getElementById('ocrTestProgress');
-const ocrTestResults = document.getElementById('ocrTestResults');
-const ocrTestRunButton = document.getElementById('runOcrTest');
-const ocrTestShareButton = document.getElementById('shareOcrTestReport');
-const ocrTestConsent = document.getElementById('confirmOcrTestShare');
-const ocrTestCameraPicker = document.getElementById('ocrTestCameraPicker');
-const ocrTestCameraPopup = document.getElementById('ocrTestCameraPopup');
-const ocrTestCameraVideo = document.getElementById('ocrTestCameraVideo');
-const ocrTestCameraStatus = document.getElementById('ocrTestCameraStatus');
-const ocrTestTakePhotoButton = document.getElementById('takeOcrTestPhoto');
-const ocrTestStopCameraButton = document.getElementById('stopOcrTestCamera');
-let ocrTestCameraStream = null;
-let ocrTestCameraBusy = false;
-let ocrTestCameraSettings = null;
-
-function resetOcrTest() {
-  stopOcrTestCamera();
-  ocrTestItems.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-  ocrTestItems = [];
-  ocrTestMode = null;
-  ocrTestRunning = false;
-  ocrTestImageList.replaceChildren();
-  ocrTestResults.replaceChildren();
-  ocrTestResults.hidden = true;
-  ocrTestProgress.textContent = '';
-  ocrTestChoices.hidden = false;
-  ocrTestWorkspace.hidden = true;
-  ocrTestConsent.checked = false;
-  ocrTestRunButton.disabled = true;
-  ocrTestShareButton.disabled = true;
-  ocrTestCameraSettings = null;
-  document.getElementById('runOcrTest').textContent = 'Analyser les photos';
-  updateOcrTestButtons();
-}
-
-function exitOcrTestMode() {
-  stopOcrTestCamera();
-  closeAuditModal('ocrTestModal');
-  resetOcrTest();
-}
-
-function openOcrTestMode(mode) {
-  resetOcrTest();
-  ocrTestMode = mode;
-  ocrTestChoices.hidden = true;
-  ocrTestWorkspace.hidden = false;
-  document.getElementById('ocrTestModeLabel').textContent = mode === 'asset'
-    ? 'Batterie d’étiquettes d’asset'
-    : 'Batterie de lock screens';
-  openAuditModal('ocrTestModal');
-}
-
-document.getElementById('openOcrTest').addEventListener('click', () => {
-  resetOcrTest();
-  openAuditModal('ocrTestModal');
-});
-document.getElementById('startAssetBattery').addEventListener('click', () => openOcrTestMode('asset'));
-document.getElementById('startNameBattery').addEventListener('click', () => openOcrTestMode('name'));
-document.getElementById('cancelOcrTest').addEventListener('click', () => {
-  if (ocrTestRunning || ocrTestCameraBusy) return;
-  exitOcrTestMode();
-});
-document.getElementById('addOcrTestPhotos').addEventListener('click', openOcrTestCamera);
-ocrTestStopCameraButton.addEventListener('click', stopOcrTestCamera);
-ocrTestTakePhotoButton.addEventListener('click', captureAndTestOcrPhoto);
-
-function addOcrTestFiles(fileList, source = 'camera-capture') {
-  const files = Array.from(fileList || []);
-  if (!files.length) return [];
-  let totalBytes = ocrTestItems.reduce((sum, item) => sum + item.file.size, 0);
-  let rejected = 0;
-  let added = 0;
-  const addedItems = [];
-  for (const file of files) {
-    if (!file.type.startsWith('image/') || file.size > OCR_TEST_MAX_FILE_BYTES
-      || ocrTestItems.length >= OCR_TEST_MAX_IMAGES || totalBytes + file.size > OCR_TEST_MAX_TOTAL_BYTES) {
-      rejected += 1;
-      continue;
-    }
-    const item = {
-      id: ocrTestNextId++,
-      file,
-      source,
-      cameraSettings: source === 'live-camera' && ocrTestCameraSettings ? { ...ocrTestCameraSettings } : null,
-      previewUrl: URL.createObjectURL(file),
-      result: null,
-    };
-    totalBytes += file.size;
-    ocrTestItems.push(item);
-    addedItems.push(item);
-    added += 1;
-  }
-  if (added) invalidateOcrTestResults();
-  renderOcrTestItems();
-  if (rejected) {
-    ocrTestProgress.textContent = `${rejected} photo(s) ignorée(s). Limites: ${OCR_TEST_MAX_IMAGES} photos, 15 Mio par photo et 100 Mio par batterie.`;
-  }
-  return addedItems;
-}
-
-ocrTestCameraPicker.addEventListener('change', () => {
-  addOcrTestFiles(ocrTestCameraPicker.files, 'camera-capture-picker');
-  ocrTestCameraPicker.value = '';
-});
-
-async function openOcrTestCamera() {
-  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    ocrTestProgress.textContent = 'Caméra en direct indisponible dans ce contexte. Ouverture de la caméra photo du navigateur.';
-    ocrTestCameraPicker.click();
-    return;
-  }
-  if (ocrTestCameraStream) return;
-  ocrTestCameraPopup.hidden = false;
-  document.body.classList.add('capture-active');
-  ocrTestCameraStatus.textContent = 'Connexion à la caméra…';
-  ocrTestTakePhotoButton.disabled = true;
-  updateOcrTestButtons();
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
-    if (ocrTestCameraPopup.hidden) {
-      stream.getTracks().forEach((track) => track.stop());
-      return;
-    }
-    ocrTestCameraStream = stream;
-    const cameraSettings = stream.getVideoTracks()[0]?.getSettings() || {};
-    ocrTestCameraSettings = {
-      width: cameraSettings.width || null,
-      height: cameraSettings.height || null,
-      aspectRatio: cameraSettings.aspectRatio || null,
-      frameRate: cameraSettings.frameRate || null,
-      facingMode: cameraSettings.facingMode || null,
-    };
-    ocrTestCameraVideo.srcObject = stream;
-    await ocrTestCameraVideo.play();
-    await enterCaptureFullscreen(ocrTestCameraPopup);
-    ocrTestCameraStatus.textContent = 'Cadrez l’étiquette ou le nom, puis prenez autant de photos que nécessaire.';
-    ocrTestTakePhotoButton.disabled = false;
-    updateOcrTestButtons();
-  } catch (error) {
-    stopOcrTestCamera();
-    ocrTestProgress.textContent = error.name === 'NotAllowedError'
-      ? 'L’accès à la caméra a été refusé.'
-      : 'Impossible d’ouvrir la caméra. Vérifiez les autorisations du navigateur.';
-  }
-}
-
-function stopOcrTestCamera() {
-  if (ocrTestCameraStream) {
-    ocrTestCameraStream.getTracks().forEach((track) => track.stop());
-    ocrTestCameraStream = null;
-  }
-  ocrTestCameraVideo.pause();
-  ocrTestCameraVideo.srcObject = null;
-  ocrTestCameraPopup.hidden = true;
-  ocrTestTakePhotoButton.disabled = false;
-  ocrTestStopCameraButton.disabled = false;
-  document.body.classList.remove('capture-active');
-  exitCaptureFullscreen(ocrTestCameraPopup);
-  updateOcrTestButtons();
-}
-
-async function captureAndTestOcrPhoto() {
-  if (!ocrTestCameraStream || ocrTestCameraBusy) return;
-  const frame = captureVideoFrame(ocrTestCameraVideo);
-  if (!frame) {
-    ocrTestCameraStatus.textContent = 'Mise au point de la caméra…';
-    return;
-  }
-  ocrTestCameraBusy = true;
-  ocrTestTakePhotoButton.disabled = true;
-  ocrTestStopCameraButton.disabled = true;
-  ocrTestCameraStatus.textContent = 'Enregistrement de la photo…';
-  ocrTestCameraPopup.classList.add('capture-photo-flash');
-  window.setTimeout(() => ocrTestCameraPopup.classList.remove('capture-photo-flash'), 300);
-  try {
-    const blob = await new Promise((resolve) => frame.toBlob(resolve, 'image/jpeg', 0.94));
-    if (!blob) throw new Error('Impossible de créer la photo.');
-    const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
-    const [item] = addOcrTestFiles([file], 'live-camera');
-    if (!item) throw new Error('Photo refusée: vérifiez les limites de taille et de nombre.');
-    ocrTestCameraStatus.textContent = `Photo ${ocrTestItems.length} ajoutée. Cadrez la suivante.`;
-  } catch (error) {
-    ocrTestCameraStatus.textContent = error?.message || 'Échec de la capture.';
-  } finally {
-    ocrTestCameraBusy = false;
-    ocrTestTakePhotoButton.disabled = false;
-    ocrTestStopCameraButton.disabled = false;
-    updateOcrTestButtons();
-  }
-}
-
-function renderOcrTestItems() {
-  ocrTestImageList.replaceChildren();
-  ocrTestItems.forEach((item, index) => {
-    const row = document.createElement('li');
-    row.className = 'ocr-test-image-item';
-    const image = document.createElement('img');
-    image.className = 'ocr-test-thumbnail';
-    image.src = item.previewUrl;
-    image.alt = `Aperçu ${index + 1}`;
-    const details = document.createElement('span');
-    details.className = 'ocr-test-photo-label';
-    details.textContent = `Photo ${index + 1} · ${item.file.type || 'type inconnu'} · ${(item.file.size / 1024 / 1024).toFixed(2)} Mio`;
-    row.append(image, details);
-    ocrTestImageList.append(row);
-  });
-  updateOcrTestButtons();
-}
-
-function invalidateOcrTestResults() {
-  const hadResults = ocrTestItems.some((item) => item.result);
-  ocrTestItems.forEach((item) => { item.result = null; });
-  ocrTestResults.replaceChildren();
-  ocrTestResults.hidden = true;
-  if (hadResults) ocrTestProgress.textContent = 'Photos modifiées. Relancez l’analyse avant de partager.';
-}
-
-function updateOcrTestButtons() {
-  const hasImages = ocrTestItems.length > 0;
-  const allResultsPresent = ocrTestItems.length > 0
-    && ocrTestItems.every((item) => item.result !== null);
-  const cameraActive = Boolean(ocrTestCameraStream) || !ocrTestCameraPopup.hidden;
-  ocrTestRunButton.disabled = ocrTestRunning || ocrTestCameraBusy || cameraActive || !hasImages;
-  ocrTestShareButton.disabled = ocrTestRunning || ocrTestCameraBusy || cameraActive || !allResultsPresent
-    || !ocrTestConsent.checked;
-  document.getElementById('cancelOcrTest').disabled = ocrTestRunning || ocrTestCameraBusy;
-  document.getElementById('addOcrTestPhotos').disabled = ocrTestRunning || ocrTestCameraBusy;
-  ocrTestTakePhotoButton.disabled = ocrTestRunning || ocrTestCameraBusy || !ocrTestCameraStream;
-  ocrTestStopCameraButton.disabled = ocrTestRunning || ocrTestCameraBusy;
-}
-
-ocrTestConsent.addEventListener('change', updateOcrTestButtons);
-
-function normalizeOcrTestValue(value, mode) {
-  const compact = String(value || '').trim().replace(/\s+/g, ' ');
-  return mode === 'asset' ? compact.toUpperCase() : compact.toLocaleLowerCase('fr');
-}
-
 function measureOcrImageQuality(image) {
   const maxSide = 256;
-  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+  const { width, height } = getImageDimensions(image);
+  if (!width || !height) return null;
+  const scale = Math.min(1, maxSide / Math.max(width, height));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) return null;
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
@@ -1737,150 +1775,6 @@ function measureOcrImageQuality(image) {
     sharpnessLaplacianVariance: Number((Math.max(0, laplacianSquaredSum / Math.max(1, laplacianCount) - laplacianMean ** 2)).toFixed(2)),
   };
 }
-
-async function testOcrImage(item, index, total) {
-  const templateState = ocrTestMode === 'asset' ? assetState : nameState;
-  const config = getLiveConfig(templateState);
-  const snapshot = {
-    image: templateState.image,
-    rotation: templateState.rotation,
-    invert: templateState.invert,
-    crop: templateState.crop,
-  };
-  const startedAt = performance.now();
-  const diagnostics = { rotations: [] };
-  try {
-    const image = await loadImageFile(item.file);
-    let imageQuality;
-    try {
-      imageQuality = measureOcrImageQuality(image);
-    } catch {
-      imageQuality = null;
-    }
-    templateState.image = image;
-    templateState.rotation = 0;
-    templateState.crop = null;
-    templateState.invert = false;
-    renderPreview(templateState);
-    const recognizedText = await withOcrLock(() => autoRecognize(
-      templateState,
-      config.score,
-      config.detectOrientation,
-      () => {},
-      () => true,
-      'standard',
-      0,
-      false,
-      diagnostics
-    ));
-    const extractedValue = config.extract(recognizedText);
-    const normalizedActual = normalizeOcrTestValue(extractedValue, ocrTestMode);
-    item.result = {
-      id: `sample-${String(index + 1).padStart(3, '0')}`,
-      prediction: {
-        recognizedText,
-        extractedValue,
-        normalizedExtractedValue: normalizedActual,
-        confidence: Number.isFinite(diagnostics.refinement?.confidence) ? diagnostics.refinement.confidence : null,
-      },
-      elapsedMs: Math.round(performance.now() - startedAt),
-      image: {
-        source: item.source,
-        mimeType: item.file.type || 'application/octet-stream',
-        bytes: item.file.size,
-        lastModifiedAt: item.file.lastModified ? new Date(item.file.lastModified).toISOString() : null,
-        decodedWidth: image.naturalWidth,
-        decodedHeight: image.naturalHeight,
-        cameraSettings: item.cameraSettings,
-        quality: imageQuality,
-      },
-      diagnostics,
-      error: null,
-    };
-  } catch (error) {
-    item.result = {
-      id: `sample-${String(index + 1).padStart(3, '0')}`,
-      prediction: { recognizedText: '', extractedValue: '', normalizedExtractedValue: '', confidence: null },
-      elapsedMs: Math.round(performance.now() - startedAt),
-      image: {
-        source: item.source,
-        mimeType: item.file.type || 'application/octet-stream',
-        bytes: item.file.size,
-        cameraSettings: item.cameraSettings,
-      },
-      diagnostics,
-      error: String(error?.message || error),
-    };
-  } finally {
-    templateState.image = snapshot.image;
-    templateState.rotation = snapshot.rotation;
-    templateState.invert = snapshot.invert;
-    templateState.crop = snapshot.crop;
-    if (snapshot.image) renderPreview(templateState);
-  }
-  ocrTestProgress.textContent = `Analyse ${index + 1}/${total} terminée.`;
-}
-
-function renderOcrTestResults() {
-  const table = document.createElement('table');
-  const head = document.createElement('thead');
-  const header = document.createElement('tr');
-  ['Photo', 'Résultat OCR proposé', 'Confiance', 'Temps'].forEach((text) => {
-    const cell = document.createElement('th');
-    cell.textContent = text;
-    header.append(cell);
-  });
-  head.append(header);
-  const body = document.createElement('tbody');
-  ocrTestItems.forEach((item, index) => {
-    const result = item.result;
-    const row = document.createElement('tr');
-    const confidence = result?.diagnostics?.refinement?.confidence;
-    [
-      `Photo ${index + 1}`,
-      result?.prediction?.extractedValue || result?.error || 'Aucune valeur extraite',
-      Number.isFinite(confidence) ? `${Math.round(confidence)} %` : 'N/D',
-      result ? `${result.elapsedMs} ms` : 'N/D',
-    ].forEach((text) => {
-      const cell = document.createElement('td');
-      cell.textContent = text;
-      row.append(cell);
-    });
-    body.append(row);
-  });
-  table.append(head, body);
-  ocrTestResults.replaceChildren(table);
-  ocrTestResults.hidden = false;
-}
-
-ocrTestRunButton.addEventListener('click', async () => {
-  if (ocrTestRunning || ocrTestRunButton.disabled) return;
-  ocrTestRunning = true;
-  ocrTestItems.forEach((item) => { item.result = null; });
-  ocrTestResults.hidden = true;
-  ocrTestProgress.textContent = 'Initialisation du moteur OCR…';
-  renderOcrTestItems();
-  updateOcrTestButtons();
-  const start = performance.now();
-  try {
-    if (!await prepareOcr(ocrTestMode === 'asset' ? assetState : nameState)) {
-      throw new Error('Le moteur OCR ne peut pas être initialisé.');
-    }
-    for (let index = 0; index < ocrTestItems.length; index += 1) {
-      // eslint-disable-next-line no-await-in-loop
-      await testOcrImage(ocrTestItems[index], index, ocrTestItems.length);
-      renderOcrTestResults();
-    }
-    const outputCount = ocrTestItems.filter((item) => item.result?.prediction?.extractedValue).length;
-    ocrTestProgress.textContent = `Analyse terminée: ${outputCount}/${ocrTestItems.length} résultat(s) OCR proposé(s); ${(performance.now() - start).toFixed(0)} ms au total.`;
-  } catch (error) {
-    ocrTestProgress.textContent = `Batterie interrompue: ${error?.message || error}`;
-  } finally {
-    ocrTestRunning = false;
-    renderOcrTestItems();
-    updateOcrTestButtons();
-  }
-});
 
 const ZIP_CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, value) => {
   let crc = value;
@@ -1938,7 +1832,7 @@ function zipHeader(size, nameBytes, crc, offset, central = false, timestamp = ne
   return header;
 }
 
-async function createOcrTestZip(entries) {
+async function createZipArchive(entries) {
   const encoder = new TextEncoder();
   const parts = [];
   const centralParts = [];
@@ -1971,53 +1865,29 @@ async function createOcrTestZip(entries) {
   return new Blob([...parts, ...centralParts, end], { type: 'application/zip' });
 }
 
-function ocrTestPhotoExtension(file) {
-  const extension = file.name.split('.').pop().toLowerCase();
-  return /^[a-z0-9]{1,8}$/.test(extension) ? extension : 'image';
-}
-
-async function getOcrTestDeviceHints() {
-  const userAgentData = navigator.userAgentData;
-  if (!userAgentData) return null;
-  const basicHints = {
-    brands: userAgentData.brands || [],
-    mobile: userAgentData.mobile,
-    platform: userAgentData.platform,
+function scanEvidencePhotoExtension(blob) {
+  const extensionByType = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
   };
-  try {
-    const detailedHints = await userAgentData.getHighEntropyValues(['model', 'platformVersion']);
-    return {
-      ...basicHints,
-      model: detailedHints.model || null,
-      platformVersion: detailedHints.platformVersion || null,
-    };
-  } catch {
-    return basicHints;
-  }
+  return extensionByType[blob?.type] || 'bin';
 }
 
-async function buildOcrTestReport() {
-  const recognizedCount = ocrTestItems.filter((item) => item.result?.prediction?.extractedValue).length;
-  const elapsedTimes = ocrTestItems.map((item) => item.result?.elapsedMs).filter(Number.isFinite).sort((a, b) => a - b);
-  const p95Index = Math.max(0, Math.ceil(elapsedTimes.length * 0.95) - 1);
-  const middleIndex = Math.floor(elapsedTimes.length / 2);
-  const medianElapsedMs = elapsedTimes.length
-    ? elapsedTimes.length % 2
-      ? elapsedTimes[middleIndex]
-      : (elapsedTimes[middleIndex - 1] + elapsedTimes[middleIndex]) / 2
-    : null;
-    const userAgentData = await getOcrTestDeviceHints();
+function buildScanEvidenceReport(records) {
   return {
-    schema: 'audit-bureau-propre-ocr-benchmark/v3',
+    schema: 'audit-bureau-propre-live-scan-evidence/v1',
     createdAt: new Date().toISOString(),
     privacy: {
-      processing: 'local-browser-only',
-      photoPolicy: 'original-photo-bytes-included-in-this-explicitly-shared-archive',
-      warning: 'Photos and OCR predictions may contain personal information; original photo bytes may include EXIF metadata such as location.',
+      processing: 'local-browser-only-until-explicit-share',
+      photos: 'original-photo-bytes-included-without-recompression',
+      warning: 'Photos, recognized text and EXIF metadata may contain personal or confidential information.',
     },
     application: {
-      version: OCR_TEST_APP_VERSION,
-      tesseractJsVersion: OCR_TEST_TESSERACT_VERSION,
+      version: APP_VERSION,
+      tesseractJsVersion: TESSERACT_VERSION,
       languageModels: ['eng.traineddata.gz', 'fra.traineddata.gz'],
       recognitionEngineMode: 'LSTM (OEM 1)',
       pipeline: {
@@ -2025,20 +1895,19 @@ async function buildOcrTestReport() {
         refinementPageSegmentationMode: 6,
         nameFallbackPageSegmentationMode: 7,
         nameFallbackMaxCandidates: 4,
-        lowSharpnessAdviceThreshold: 300,
-        preprocessing: 'grayscale + global min/max contrast stretch; no adaptive retry',
+        preprocessing: 'grayscale + global min/max contrast stretch',
         maxLongSideBeforeCrop: 1800,
         minLongSideAfterCrop: 700,
         maxUpscale: 4,
         assetRotations: ROTATIONS,
         nameRotations: [0],
+        nameLowSharpnessAdviceThreshold: NAME_LOW_SHARPNESS_VARIANCE,
       },
     },
     environment: {
       userAgent: navigator.userAgent,
       platform: navigator.platform || null,
       languages: navigator.languages || [],
-      userAgentData,
       hardwareConcurrency: navigator.hardwareConcurrency || null,
       deviceMemoryGiB: navigator.deviceMemory || null,
       screen: { width: screen.width, height: screen.height, pixelRatio: window.devicePixelRatio || 1 },
@@ -2046,58 +1915,68 @@ async function buildOcrTestReport() {
       secureContext: window.isSecureContext,
       onlineAtExport: navigator.onLine,
     },
-    battery: {
-      category: ocrTestMode === 'asset' ? 'asset-label' : 'lock-screen-name',
-      sampleCount: ocrTestItems.length,
-      recognizedCount,
-      noOutputCount: ocrTestItems.length - recognizedCount,
-      recognitionYieldRate: ocrTestItems.length ? recognizedCount / ocrTestItems.length : 0,
-      groundTruth: {
-        provided: false,
-        exactMatchRate: null,
-        characterErrorRate: null,
-        note: 'Exactitude et CER non calculés: aucune vérité terrain n’a été saisie.',
-      },
-      medianSampleElapsedMs: medianElapsedMs,
-      p95SampleElapsedMs: elapsedTimes.length ? elapsedTimes[p95Index] : null,
-      samples: ocrTestItems.map((item, index) => ({
-        ...item.result,
-        photoPath: `photos/sample-${String(index + 1).padStart(3, '0')}.${ocrTestPhotoExtension(item.file)}`,
-      })),
-    },
-    notes: [
-      'No ground-truth values are collected; recognitionYieldRate means a non-empty extracted value, not an accuracy score.',
-      'Image quality values are local, approximate measurements on a 256-pixel preview; they are diagnostic signals, not pass/fail thresholds.',
-      'Name extraction retries up to four ranked text-line crops with PSM 7 when the initial suggestion scores below 2; fallback attempts record lengths, scores, confidence and timing but not alternative OCR strings.',
-      'The live scanner marks low sharpness for a retake suggestion and uncertain name candidates for manual confirmation; neither is a calibrated quality or correctness guarantee.',
-      'OCR confidence is Tesseract confidence, not a calibrated probability.',
-      'Original images are stored byte-for-byte; filenames are replaced with sample IDs, but EXIF metadata is not removed.',
-      'Device/browser details and live camera settings are recorded only when the browser exposes them.',
-    ],
+    captures: records.map((record, index) => {
+      const photoPath = record.photoBlob
+        ? `photos/capture-${String(index + 1).padStart(4, '0')}.${scanEvidencePhotoExtension(record.photoBlob)}`
+        : null;
+      return {
+        id: record.id,
+        capturedAt: record.capturedAt,
+        finishedAt: record.finishedAt || null,
+        scanType: record.scanType,
+        source: record.source,
+        status: record.status,
+        elapsedMs: record.elapsedMs,
+        image: {
+          path: photoPath,
+          available: Boolean(record.photoBlob),
+          mimeType: record.image?.mimeType || null,
+          bytes: record.image?.bytes || 0,
+          width: record.image?.width || null,
+          height: record.image?.height || null,
+          quality: record.image?.quality || null,
+        },
+        cameraSettings: record.cameraSettings || null,
+        result: {
+          recognizedText: record.recognizedText || '',
+          extractedValue: record.extractedValue || '',
+          confirmedValue: record.confirmedValue || null,
+          confirmedAt: record.confirmedAt || null,
+          uncertain: record.uncertain,
+          confidence: record.confidence,
+        },
+        diagnostics: record.diagnostics || { attempts: [] },
+        error: record.error || record.photoError || null,
+      };
+    }),
   };
 }
 
-async function createOcrTestReportFile() {
-  const report = await buildOcrTestReport();
-  const entries = [{
+async function createScanEvidenceZipFile() {
+  await scanEvidenceReadyPromise;
+  await scanEvidenceWriteQueue;
+  const records = [...scanEvidenceRecords].sort((first, second) => first.capturedAt.localeCompare(second.capturedAt));
+  if (!records.length) throw new Error('Aucune photo de scan à partager.');
+  const report = buildScanEvidenceReport(records);
+  const zipEntries = [{
     name: 'report.json',
     blob: new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }),
   }];
-  ocrTestItems.forEach((item, index) => {
-    entries.push({
-      name: `photos/sample-${String(index + 1).padStart(3, '0')}.${ocrTestPhotoExtension(item.file)}`,
-      blob: item.file,
+  records.forEach((record, index) => {
+    if (!record.photoBlob) return;
+    zipEntries.push({
+      name: report.captures[index].image.path,
+      blob: record.photoBlob,
     });
   });
-  const zip = await createOcrTestZip(entries);
+  const zip = await createZipArchive(zipEntries);
   const now = new Date();
   const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
   const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map((part) => String(part).padStart(2, '0')).join('-');
-  const category = ocrTestMode === 'asset' ? 'etiquettes' : 'lock-screens';
-  return new File([zip], `rapport_ocr_v3_${category}_${date}_${time}.zip`, { type: 'application/zip' });
+  return new File([zip], `amelioration_audit_bureau_propre_${date}_${time}.zip`, { type: 'application/zip' });
 }
 
-function downloadOcrTestReport(file) {
+function downloadScanEvidenceZip(file) {
   const url = URL.createObjectURL(file);
   const link = document.createElement('a');
   link.href = url;
@@ -2106,33 +1985,41 @@ function downloadOcrTestReport(file) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-ocrTestShareButton.addEventListener('click', async () => {
-  if (!ocrTestConsent.checked || ocrTestShareButton.disabled) return;
-  ocrTestShareButton.disabled = true;
-  ocrTestProgress.textContent = 'Préparation du ZIP avec le rapport et les photos originales…';
+document.getElementById('sendScanEvidence').addEventListener('click', async () => {
+  if (scanEvidenceBusy || !scanEvidenceRecords.length) return;
+  if (assetState.liveBusy || nameState.liveBusy || assetState.liveActive || nameState.liveActive) {
+    alert('Terminez ou arrêtez les scans en cours avant de préparer le partage.');
+    return;
+  }
+  if (!confirm('Le ZIP contient les photos originales, le texte reconnu et les diagnostics OCR. Les images peuvent montrer des personnes, des informations confidentielles ou des métadonnées EXIF. Vous choisirez le canal de partage. Continuer ?')) return;
+  scanEvidenceBusy = true;
+  scanEvidenceNotice = 'Préparation du ZIP avec les photos et les diagnostics OCR…';
+  updateScanEvidenceStatus();
   try {
-    const file = await createOcrTestReportFile();
+    const file = await createScanEvidenceZipFile();
     if (!navigator.share || !navigator.canShare || !navigator.canShare({ files: [file] })) {
-      downloadOcrTestReport(file);
-      ocrTestProgress.textContent = `Rapport téléchargé (${(file.size / 1024 / 1024).toFixed(1)} Mio). Partagez ce ZIP par le canal autorisé.`;
+      downloadScanEvidenceZip(file);
+      scanEvidenceNotice = 'ZIP téléchargé. Les données restent sur cet appareil jusqu’à leur partage ou au vidage de la liste.';
       return;
     }
     await navigator.share({
-      title: 'Rapport de qualité OCR',
-      text: 'Rapport local de benchmark OCR, avec photos originales.',
+      title: 'Éléments pour améliorer Audit Bureau Propre',
+      text: 'Photos et résultats des scans OCR pour améliorer l’application.',
       files: [file],
     });
-    ocrTestProgress.textContent = 'Partage terminé. Les photos n’ont été transmises qu’au canal choisi.';
+    await resetAuditData();
+    scanEvidenceNotice = 'Éléments envoyés. La liste, les photos et les résultats locaux ont été supprimés.';
   } catch (error) {
-    if (error.name !== 'AbortError') {
-      ocrTestProgress.textContent = `Partage impossible: ${error?.message || error}`;
-    } else {
-      ocrTestProgress.textContent = 'Partage annulé. Le rapport reste disponible pour un nouvel essai.';
-    }
+    scanEvidenceNotice = error?.name === 'AbortError'
+      ? 'Partage annulé. Les données restent sur cet appareil.'
+      : `Partage impossible : ${error?.message || error}. Les données restent sur cet appareil.`;
   } finally {
-    updateOcrTestButtons();
+    scanEvidenceBusy = false;
+    updateScanEvidenceStatus();
   }
 });
 
+scanEvidenceReadyPromise = initializeScanEvidence();
 renderTable();
 scheduleOcrPreload();
+updateScanEvidenceStatus();

@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.35.0&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.36.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.35.0</span>
+  <span class="version-badge">Version 1.36.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -87,59 +87,16 @@
       <button class="btn btn-share" id="shareOneDrive" type="button">☁️ Exporter le fichier</button>
       <button class="btn btn-danger" id="clearAll" type="button">🗑 Vider la liste</button>
     </div>
+    <button class="btn btn-share scan-evidence-share" id="sendScanEvidence" type="button" disabled>Envoyer les éléments pour améliorer l'application</button>
+    <p class="scan-evidence-status" id="scanEvidenceStatus" role="status" aria-live="polite">Chargement des photos enregistrées…</p>
   </section>
 
   <p class="privacy-note">
-    Toutes les photos et le texte OCR restent uniquement dans la mémoire de votre téléphone
-    (traitement local via WebAssembly, aucun appel externe). Seuls les fichiers que vous partagez
-    volontairement quittent l'application: l'Excel d'audit ou le ZIP de test OCR, qui contient les
-    photos originales et peut inclure des données personnelles ou EXIF.
+    Les photos de scan et leurs résultats OCR restent sur cet appareil. Le ZIP de partage contient
+    les photos originales, le texte reconnu et les diagnostics; il peut révéler des données
+    personnelles, confidentielles ou EXIF. Rien ne quitte l'application sans votre confirmation.
   </p>
 </main>
-
-<section class="ocr-test-launch" aria-labelledby="ocr-test-heading">
-  <h2 id="ocr-test-heading">Amélioration de la reconnaissance</h2>
-  <button class="btn btn-primary" id="openOcrTest" type="button">Tester la qualité de l'OCR</button>
-</section>
-
-<div class="audit-modal" id="ocrTestModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="ocr-test-title">
-  <div class="audit-modal-content ocr-test-content">
-    <h2 id="ocr-test-title">Tester la qualité de l'OCR</h2>
-    <p class="ocr-test-warning">Le rapport contient les résultats proposés par l’OCR et les photos originales. Les images ou le texte reconnu peuvent contenir des données personnelles ou EXIF. Rien n’est envoyé automatiquement.</p>
-    <div id="ocrTestChoices" class="ocr-test-choices">
-      <button class="btn btn-live" id="startAssetBattery" type="button">Photographier une étiquette</button>
-      <button class="btn btn-live" id="startNameBattery" type="button">Photographier un écran de verrouillage</button>
-    </div>
-    <div id="ocrTestWorkspace" hidden>
-      <h3 class="ocr-test-mode-label" id="ocrTestModeLabel"></h3>
-      <button class="btn btn-live ocr-test-add-photos" id="addOcrTestPhotos" type="button">Prendre ou ajouter des photos</button>
-      <input id="ocrTestCameraPicker" type="file" accept="image/*" capture="environment" hidden>
-      <div class="live-scanner ocr-test-camera" id="ocrTestCameraPopup" hidden>
-        <video id="ocrTestCameraVideo" class="live-video" playsinline muted aria-label="Aperçu de la caméra"></video>
-        <div class="scan-frame" aria-hidden="true"></div>
-        <div class="live-status" id="ocrTestCameraStatus" aria-live="polite">Cadrez le texte puis prenez une photo.</div>
-        <div class="camera-controls">
-          <button class="btn btn-primary" id="takeOcrTestPhoto" type="button">Prendre une photo</button>
-          <button class="btn btn-stop-live" id="stopOcrTestCamera" type="button">Terminer les photos</button>
-        </div>
-      </div>
-      <ul id="ocrTestImageList" class="ocr-test-image-list" aria-live="polite"></ul>
-      <div id="ocrTestProgress" class="ocr-test-progress" role="status" aria-live="polite"></div>
-      <div id="ocrTestResults" class="ocr-test-results" hidden></div>
-      <label class="ocr-test-consent">
-        <input id="confirmOcrTestShare" type="checkbox">
-        <span>Je confirme que je peux partager ces photos et résultats OCR par le canal choisi.</span>
-      </label>
-      <div class="modal-actions ocr-test-actions">
-        <button class="btn btn-primary" id="runOcrTest" type="button" disabled>Analyser les photos</button>
-        <button class="btn btn-share" id="shareOcrTestReport" type="button" disabled>Partager le rapport avec les photos</button>
-      </div>
-      <div class="ocr-test-exit">
-        <button class="btn btn-secondary" id="cancelOcrTest" type="button">Quitter le mode test</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <div class="audit-modal" id="unsecuredModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="unsecured-modal-title">
   <div class="audit-modal-content">
@@ -259,8 +216,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.35.0"></script>
-<script src="vendor/xlsx.full.min.js?v=1.35.0"></script>
-<script src="app.js?v=1.35.0"></script>
+<script src="vendor/tesseract.min.js?v=1.36.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.36.0"></script>
+<script src="app.js?v=1.36.0"></script>
 </body>
 </html>
