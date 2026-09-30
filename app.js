@@ -11,10 +11,11 @@ const AUDIT_EXPORT_SIGNATURE_KEY = 'audit-bureau-propre-export-signature-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
-const APP_VERSION = '1.37.0';
+const APP_VERSION = '1.38.0';
 const TESSERACT_VERSION = '5.1.1';
 const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
 const SCAN_EVIDENCE_STORE_NAME = 'captures';
+const workerInitialization = { attempts: 0, status: 'not-started', lastDurationMs: null, totalDurationMs: 0 };
 let scanEvidenceRecords = [];
 let scanEvidenceDbPromise = null;
 let scanEvidenceReadyPromise = Promise.resolve();
@@ -54,6 +55,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveActive: false,
     liveBusy: false,
     scanReady: false,
+    liveStartupTimings: null,
     liveSaved: null,
     currentEvidenceId: null,
     ocrReady: false,
@@ -309,12 +311,28 @@ function abs(relativePath) {
 }
 function getWorker() {
   if (!workerPromise) {
+    const startedAt = performance.now();
+    workerInitialization.attempts += 1;
+    workerInitialization.status = 'loading';
     workerPromise = Tesseract.createWorker('eng+fra', 1, {
       workerPath: abs('vendor/worker.min.js'),
       corePath: abs('vendor/'),
       langPath: abs('lang'),
       cacheMethod: 'write',
       logger: () => {},
+    }).then((worker) => {
+      const durationMs = Math.round(performance.now() - startedAt);
+      workerInitialization.lastDurationMs = durationMs;
+      workerInitialization.totalDurationMs += durationMs;
+      workerInitialization.status = 'ready';
+      return worker;
+    }).catch((error) => {
+      const durationMs = Math.round(performance.now() - startedAt);
+      workerInitialization.lastDurationMs = durationMs;
+      workerInitialization.totalDurationMs += durationMs;
+      workerInitialization.status = 'failed';
+      workerPromise = null;
+      throw error;
     });
   }
   return workerPromise;
@@ -950,14 +968,19 @@ function imageToScanBlob(image, originalBlob) {
   });
 }
 
-async function startScanEvidenceRecord(state, config, image, liveCapture, originalBlob, imageQuality) {
+async function startScanEvidenceRecord(state, config, image, liveCapture, originalBlob, imageQuality, timings) {
+  let phaseStartedAt = performance.now();
   await scanEvidenceReadyPromise;
+  timings.evidencePreparationWaitMs = Math.round(performance.now() - phaseStartedAt);
   let photoBlob = null;
   let photoError = '';
+  phaseStartedAt = performance.now();
   try {
     photoBlob = await imageToScanBlob(image, originalBlob);
   } catch (error) {
     photoError = String(error?.message || error);
+  } finally {
+    timings.photoEncodingMs = Math.round(performance.now() - phaseStartedAt);
   }
   const dimensions = getImageDimensions(image);
   const id = window.crypto?.randomUUID?.() || `scan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -986,13 +1009,15 @@ async function startScanEvidenceRecord(state, config, image, liveCapture, origin
     uncertain: null,
     confidence: null,
     elapsedMs: null,
-    diagnostics: { attempts: [] },
+    diagnostics: { attempts: [], timings },
     error: photoError || null,
   };
   scanEvidenceRecords.push(record);
   state.currentEvidenceId = id;
   scanEvidenceNotice = '';
+  phaseStartedAt = performance.now();
   await persistScanEvidenceRecord(record);
+  timings.evidencePersistMs = Math.round(performance.now() - phaseStartedAt);
   updateScanEvidenceStatus();
   return record;
 }
@@ -1093,7 +1118,7 @@ function resetScanVerification(state, config) {
   state.crop = null;
 }
 
-async function analyzeCapturedImage(state, config, image, liveCapture, originalBlob = null) {
+async function analyzeCapturedImage(state, config, image, liveCapture, originalBlob = null, scanTimings = {}) {
   if (scanEvidenceClearing || (liveCapture && !state.liveActive) || (state.liveBusy && state !== assetState)) return;
   if (state.liveBusy && state === assetState) resetScanVerification(state, config);
   activeScanAnalysisCount += 1;
@@ -1102,17 +1127,36 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
   state.liveBtn.disabled = true;
   const progressEl = document.getElementById(config.progressId);
   const statusEl = liveCapture ? state.liveStatus : progressEl;
+  const startedAt = performance.now();
+  const imageQualityStartedAt = performance.now();
   let lowSharpness = false;
   let imageQuality = null;
+  let imageQualityMs = null;
   try {
     imageQuality = measureOcrImageQuality(image);
     lowSharpness = config.isName
       && imageQuality?.sharpnessLaplacianVariance < NAME_LOW_SHARPNESS_VARIANCE;
   } catch (e) {
     lowSharpness = false;
+  } finally {
+    imageQualityMs = Math.round(performance.now() - imageQualityStartedAt);
   }
-  const startedAt = performance.now();
-  const diagnostics = { attempts: [] };
+  const diagnostics = {
+    attempts: [],
+    timings: {
+      liveStartup: scanTimings.liveStartup || null,
+      captureFrameMs: scanTimings.captureFrameMs ?? null,
+      imageQualityMs,
+      evidencePreparationWaitMs: null,
+      photoEncodingMs: null,
+      evidencePersistMs: null,
+      workerReadyWaitMs: null,
+      workerInitialization: null,
+      ocrQueueWaitMs: null,
+      ocrPipelineMs: null,
+      totalAnalysisMs: null,
+    },
+  };
   let evidenceRecord = null;
   let evidenceStatus = 'error';
   let recognizedText = '';
@@ -1121,12 +1165,18 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
   let confidence = null;
   let evidenceError = '';
   try {
-    evidenceRecord = await startScanEvidenceRecord(state, config, image, liveCapture, originalBlob, imageQuality);
+    evidenceRecord = await startScanEvidenceRecord(
+      state, config, image, liveCapture, originalBlob, imageQuality, diagnostics.timings
+    );
     if (analysisGeneration !== state.analysisGeneration || (liveCapture && !state.liveActive)) {
       evidenceStatus = 'interrupted';
       return;
     }
-    if (!await prepareOcr(state)) {
+    const workerReadyStartedAt = performance.now();
+    const workerReady = await prepareOcr(state);
+    diagnostics.timings.workerReadyWaitMs = Math.round(performance.now() - workerReadyStartedAt);
+    diagnostics.timings.workerInitialization = { ...workerInitialization };
+    if (!workerReady) {
       statusEl.textContent = 'OCR indisponible. Réessayez.';
       evidenceStatus = 'engine-unavailable';
       evidenceError = 'Le moteur OCR n’a pas pu être initialisé.';
@@ -1147,36 +1197,43 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
     state.crop = null;
     state.image = image;
     renderPreview(state);
+    const queuedAt = performance.now();
     recognizedText = await withOcrLock(async () => {
-      const standardAttempt = { preprocessing: 'standard', rotations: [] };
-      diagnostics.attempts.push(standardAttempt);
-      let recognizedText = await autoRecognize(
-        state,
-        config.score,
-        config.detectOrientation,
-        reportProgress,
-        () => analysisGeneration === state.analysisGeneration,
-        'standard',
-        0,
-        !config.retryPreprocess,
-        standardAttempt
-      );
-      if (config.retryPreprocess && !config.extract(recognizedText)) {
-        const adaptiveAttempt = { preprocessing: 'adaptive', rotations: [] };
-        diagnostics.attempts.push(adaptiveAttempt);
-        recognizedText = await autoRecognize(
+      diagnostics.timings.ocrQueueWaitMs = Math.round(performance.now() - queuedAt);
+      const pipelineStartedAt = performance.now();
+      try {
+        const standardAttempt = { preprocessing: 'standard', rotations: [] };
+        diagnostics.attempts.push(standardAttempt);
+        let recognizedText = await autoRecognize(
           state,
           config.score,
           config.detectOrientation,
           reportProgress,
           () => analysisGeneration === state.analysisGeneration,
-          'adaptive',
-          80,
-          true,
-          adaptiveAttempt
+          'standard',
+          0,
+          !config.retryPreprocess,
+          standardAttempt
         );
+        if (config.retryPreprocess && !config.extract(recognizedText)) {
+          const adaptiveAttempt = { preprocessing: 'adaptive', rotations: [] };
+          diagnostics.attempts.push(adaptiveAttempt);
+          recognizedText = await autoRecognize(
+            state,
+            config.score,
+            config.detectOrientation,
+            reportProgress,
+            () => analysisGeneration === state.analysisGeneration,
+            'adaptive',
+            80,
+            true,
+            adaptiveAttempt
+          );
+        }
+        return recognizedText;
+      } finally {
+        diagnostics.timings.ocrPipelineMs = Math.round(performance.now() - pipelineStartedAt);
       }
-      return recognizedText;
     });
     if (analysisGeneration !== state.analysisGeneration || (liveCapture && !state.liveActive)) {
       evidenceStatus = 'interrupted';
@@ -1246,6 +1303,7 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
       evidenceRecord.uncertain = uncertainResult;
       evidenceRecord.confidence = confidence;
       evidenceRecord.elapsedMs = Math.round(performance.now() - startedAt);
+      diagnostics.timings.totalAnalysisMs = evidenceRecord.elapsedMs;
       evidenceRecord.finishedAt = new Date().toISOString();
       evidenceRecord.diagnostics = diagnostics;
       evidenceRecord.error = evidenceError || evidenceRecord.photoError || null;
@@ -1273,12 +1331,17 @@ async function captureLivePhoto(state, config) {
   if (state.liveBusy && state !== assetState) return;
   if (!state.liveBusy) prepareLiveRetake(state, config);
   if (state.liveBusy && state === assetState) resetScanVerification(state, config);
+  const captureStartedAt = performance.now();
   const frame = captureVideoFrame(state.liveVideo);
+  const captureFrameMs = Math.round(performance.now() - captureStartedAt);
   if (!frame) {
     state.liveStatus.textContent = 'Mise au point de la caméra...';
     return;
   }
-  await analyzeCapturedImage(state, config, frame, true);
+  await analyzeCapturedImage(state, config, frame, true, null, {
+    captureFrameMs,
+    liveStartup: state.liveStartupTimings ? { ...state.liveStartupTimings } : null,
+  });
 }
 
 function openFallbackCapture(state, config) {
@@ -1312,13 +1375,24 @@ async function startLiveScan(state, config) {
   state.liveActive = true;
   state.liveBusy = false;
   state.scanReady = false;
+  const startupStartedAt = performance.now();
+  state.liveStartupTimings = {
+    cameraStartupMs: null,
+    ocrReadyWaitMs: null,
+    scanReadyMs: null,
+  };
   updateCaptureButtons(state);
   state.canvas.hidden = true;
   state.liveWrap.hidden = false;
   setScanLoading(state, true, 'Chargement du moteur OCR...');
   setCaptureActive(true);
   state.liveStatus.textContent = 'Connexion à la caméra...';
-  const ocrReadyPromise = prepareOcr(state);
+  const ocrReadyStartedAt = performance.now();
+  const ocrReadyPromise = prepareOcr(state).then((ready) => {
+    state.liveStartupTimings.ocrReadyWaitMs = Math.round(performance.now() - ocrReadyStartedAt);
+    return ready;
+  });
+  const cameraStartedAt = performance.now();
 
   try {
     await enterCaptureFullscreen(state.liveWrap);
@@ -1334,6 +1408,7 @@ async function startLiveScan(state, config) {
     state.liveStream = stream;
     state.liveVideo.srcObject = stream;
     await state.liveVideo.play();
+    state.liveStartupTimings.cameraStartupMs = Math.round(performance.now() - cameraStartedAt);
     setScanLoading(state, true, 'Finalisation du scan...');
     if (!await ocrReadyPromise) {
       await stopLiveScan(state, true);
@@ -1341,6 +1416,7 @@ async function startLiveScan(state, config) {
       return;
     }
     state.scanReady = true;
+    state.liveStartupTimings.scanReadyMs = Math.round(performance.now() - startupStartedAt);
     setScanLoading(state, false);
     state.liveStatus.textContent = 'Cadrez le texte puis touchez l\'image pour analyser.';
   } catch (e) {
@@ -1902,7 +1978,7 @@ function scanEvidencePhotoExtension(blob) {
 
 function buildScanEvidenceReport(records) {
   return {
-    schema: 'audit-bureau-propre-live-scan-evidence/v1',
+    schema: 'audit-bureau-propre-live-scan-evidence/v2',
     createdAt: new Date().toISOString(),
     privacy: {
       processing: 'local-browser-only-until-explicit-share',

@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.37.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.38.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -18,6 +18,9 @@ n'est nécessaire en usage normal.
   partage réussi des éléments d'amélioration ou au vidage de la liste.
 - L'Excel et le ZIP ne quittent l'appareil qu'après une action explicite; le ZIP contient les photos
   originales et peut inclure des données personnelles, du contenu d'écran ou des métadonnées EXIF.
+- Le rapport de scan `live-scan-evidence/v2` ajoute des durées en millisecondes pour le démarrage caméra
+  et OCR, la capture, la préparation de la preuve, l'attente du worker partagé et le pipeline OCR. Les
+  temps détaillés par rotation et reprise restent disponibles pour isoler les ralentissements par appareil.
 
 ## Pourquoi il faut "servir" l'application (ne pas juste double-cliquer sur index.html)
 
