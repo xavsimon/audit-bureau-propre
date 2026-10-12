@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.38.0&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.40.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.38.0</span>
+  <span class="version-badge">Version 1.40.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -96,6 +96,23 @@
     les photos originales, le texte reconnu et les diagnostics; il peut révéler des données
     personnelles, confidentielles ou EXIF. Rien ne quitte l'application sans votre confirmation.
   </p>
+  <section class="card audit-metadata" aria-labelledby="audit-metadata-title">
+    <h2 id="audit-metadata-title">Informations de l'audit</h2>
+    <div class="audit-metadata-grid">
+      <div class="audit-metadata-field">
+        <label class="field-label" for="auditBuilding">Bâtiment (facultatif)</label>
+        <input type="text" id="auditBuilding" autocomplete="organization">
+      </div>
+      <div class="audit-metadata-field">
+        <label class="field-label" for="auditFloor">Étage (facultatif)</label>
+        <input type="text" id="auditFloor">
+      </div>
+      <div class="audit-metadata-field">
+        <label class="field-label" for="auditAuditor">Nom de l'auditeur (facultatif)</label>
+        <input type="text" id="auditAuditor" autocomplete="name">
+      </div>
+    </div>
+  </section>
 </main>
 
 <div class="audit-modal" id="unsecuredModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="unsecured-modal-title">
@@ -216,8 +233,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.38.0"></script>
-<script src="vendor/xlsx.full.min.js?v=1.38.0"></script>
-<script src="app.js?v=1.38.0"></script>
+<script src="vendor/tesseract.min.js?v=1.40.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.40.0"></script>
+<script src="app.js?v=1.40.0"></script>
 </body>
 </html>

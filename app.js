@@ -8,10 +8,11 @@
 
 const STORAGE_KEY = 'audit-bureau-propre-entries-v1';
 const AUDIT_EXPORT_SIGNATURE_KEY = 'audit-bureau-propre-export-signature-v1';
+const AUDIT_METADATA_STORAGE_KEY = 'audit-bureau-propre-metadata-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
-const APP_VERSION = '1.38.0';
+const APP_VERSION = '1.40.0';
 const TESSERACT_VERSION = '5.1.1';
 const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
 const SCAN_EVIDENCE_STORE_NAME = 'captures';
@@ -1453,6 +1454,19 @@ function loadAuditStats() {
   }
 }
 
+function loadAuditMetadata() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AUDIT_METADATA_STORAGE_KEY) || '{}');
+    return {
+      building: typeof stored.building === 'string' ? stored.building : '',
+      floor: typeof stored.floor === 'string' ? stored.floor : '',
+      auditor: typeof stored.auditor === 'string' ? stored.auditor : '',
+    };
+  } catch (e) {
+    return { building: '', floor: '', auditor: '' };
+  }
+}
+
 function loadStoredList(key) {
   try {
     const stored = JSON.parse(localStorage.getItem(key) || '[]');
@@ -1472,9 +1486,25 @@ function saveAuditStats() {
 
 let entries = loadEntries();
 let auditStats = loadAuditStats();
+let auditMetadata = loadAuditMetadata();
 let unsecuredEntries = loadStoredList(UNSECURED_ENTRIES_STORAGE_KEY);
 let otherComments = loadStoredList(OTHER_COMMENTS_STORAGE_KEY);
 let editingUnsecuredIndex = null;
+
+const auditMetadataFields = {
+  building: document.getElementById('auditBuilding'),
+  floor: document.getElementById('auditFloor'),
+  auditor: document.getElementById('auditAuditor'),
+};
+
+Object.entries(auditMetadataFields).forEach(([key, field]) => {
+  field.value = auditMetadata[key];
+  field.addEventListener('input', () => {
+    auditMetadata[key] = field.value;
+    localStorage.setItem(AUDIT_METADATA_STORAGE_KEY, JSON.stringify(auditMetadata));
+    updateScanEvidenceStatus();
+  });
+});
 
 function renderAuditCounters() {
   document.getElementById('securedCount').textContent = auditStats.secured;
@@ -1678,7 +1708,8 @@ document.querySelector('#entryTable tbody').addEventListener('click', (event) =>
 document.getElementById('clearAll').addEventListener('click', async () => {
   await scanEvidenceReadyPromise;
   const hasAuditData = entries.length || auditStats.secured || auditStats.unsecuredWithCollaborator
-    || unsecuredEntries.length || otherComments.length || scanEvidenceRecords.length;
+    || unsecuredEntries.length || otherComments.length || scanEvidenceRecords.length
+    || Object.values(auditMetadata).some((value) => value.trim());
   if (hasAuditData && !confirm('Supprimer définitivement toutes les entrées et remettre les compteurs à zéro ?')) return;
   try {
     await resetAuditData();
@@ -1698,11 +1729,13 @@ async function resetAuditData() {
   }
   entries = [];
   auditStats = { secured: 0, unsecuredWithCollaborator: 0 };
+  auditMetadata = { building: '', floor: '', auditor: '' };
   unsecuredEntries = [];
   otherComments = [];
   editingUnsecuredIndex = null;
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(AUDIT_EXPORT_SIGNATURE_KEY);
+  localStorage.removeItem(AUDIT_METADATA_STORAGE_KEY);
   localStorage.removeItem(AUDIT_STATS_STORAGE_KEY);
   localStorage.removeItem(UNSECURED_ENTRIES_STORAGE_KEY);
   localStorage.removeItem(OTHER_COMMENTS_STORAGE_KEY);
@@ -1725,6 +1758,7 @@ async function resetAuditData() {
   });
   resetUnsecuredModal();
   document.getElementById('otherComment').value = '';
+  Object.values(auditMetadataFields).forEach((field) => { field.value = ''; });
   closeAuditModal('unsecuredModal');
   closeAuditModal('otherModal');
   renderAuditCounters();
@@ -1743,6 +1777,9 @@ function buildExportWorkbook() {
     'Bureau / Salle': values.bureau || '',
     Commentaire: values.commentaire || '',
     Nombre: values.nombre ?? '',
+    Bâtiment: auditMetadata.building.trim(),
+    Étage: auditMetadata.floor.trim(),
+    'Nom de l’auditeur': auditMetadata.auditor.trim(),
   });
   const rows = [
     exportRow('Compteur', {
@@ -1760,7 +1797,10 @@ function buildExportWorkbook() {
     ...otherComments.map((e) => exportRow('Autre', e)),
   ];
   const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [{ wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 }, { wch: 72 }, { wch: 10 }];
+  ws['!cols'] = [
+    { wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 },
+    { wch: 72 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 24 },
+  ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Audit');
   return wb;
@@ -1777,7 +1817,7 @@ function getExportFile() {
 }
 
 function getAuditExportSignature() {
-  return JSON.stringify({ entries, auditStats, unsecuredEntries, otherComments });
+  return JSON.stringify({ entries, auditStats, unsecuredEntries, otherComments, auditMetadata });
 }
 
 function isCurrentAuditExportAvailable() {

@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.38.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.40.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
@@ -65,9 +65,8 @@ Deux façons simples de faire cela, au choix :
 
 ## Utilisation pendant l'audit
 
-1. Renseignez **Étage**, **BU** et **Agence** en haut de l'écran. Elles restent préremplies d'un PC
-  à l'autre, mais vous pouvez les modifier avant chaque ajout : leurs valeurs sont conservées
-  séparément pour chaque PC et apparaissent dans l'export Excel.
+1. Renseignez éventuellement le **bâtiment**, l'**étage** et le **nom de l'auditeur** en bas de page.
+  Ces informations sont conservées sur l'appareil et incluses dans l'export Excel.
 2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Attendez
   la fin de l'initialisation OCR, puis cadrez l'étiquette et touchez l'image pour déclencher l'analyse.
   Un indicateur plein écran reste visible pendant le chargement de la caméra et de l'OCR : attendez

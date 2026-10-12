@@ -528,6 +528,15 @@ textarea {
   margin: 8px 0 4px;
 }
 
+.audit-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.audit-metadata-field:last-child { grid-column: 1 / -1; }
+.audit-metadata-field .field-label { margin-top: 0; }
+
 input[type="text"] {
   width: 100%;
   padding: 10px;
@@ -595,4 +604,6 @@ th:last-child, td:last-child { white-space: nowrap; }
   .summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .modal-scan-row { flex-direction: column; }
   .modal-actions .btn { flex: 1; }
+  .audit-metadata-grid { grid-template-columns: 1fr; }
+  .audit-metadata-field:last-child { grid-column: auto; }
 }
