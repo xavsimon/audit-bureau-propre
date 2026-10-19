@@ -1,9 +1,9 @@
-# Audit Bureau Propre — version 1.40.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.41.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
 premier, puis 0° et 270°, jamais à l'envers) et lecture
-du numéro d'asset ou du nom, puis export Excel en fin d'audit. Aucun recadrage ni rotation manuelle
+du numéro de série (SN/S/N) ou du nom, puis export Excel en fin d'audit. Aucun recadrage ni rotation manuelle
 n'est nécessaire en usage normal.
 
 ## Confidentialité
@@ -67,11 +67,11 @@ Deux façons simples de faire cela, au choix :
 
 1. Renseignez éventuellement le **bâtiment**, l'**étage** et le **nom de l'auditeur** en bas de page.
   Ces informations sont conservées sur l'appareil et incluses dans l'export Excel.
-2. **Étiquette d'asset** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Attendez
+2. **Étiquette de numéro de série** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Attendez
   la fin de l'initialisation OCR, puis cadrez l'étiquette et touchez l'image pour déclencher l'analyse.
   Un indicateur plein écran reste visible pendant le chargement de la caméra et de l'OCR : attendez
   qu'il disparaisse avant de toucher l'image. La reconnaissance commence par 90°, puis teste les
-  deux autres orientations. Si le numéro est
+  deux autres orientations. Seules les lignes portant `SN` ou `S/N` sont retenues; le numéro d'asset n'est pas utilisé comme repli. Si le numéro de série est
   trouvé, un encart vert s'affiche en bas du scanner. Touchez cet encart pour garder la valeur et
   fermer le scanner ; touchez l'image pour refaire le scan. Si rien n'est trouvé, l'écran flashe en
   rouge et vous pouvez retoucher l'image pour réessayer. Pendant une
@@ -89,10 +89,10 @@ Deux façons simples de faire cela, au choix :
   Le moteur OCR est préchargé en arrière-plan après l'ouverture de la fenêtre principale afin de
   réduire l'attente au démarrage du premier scan. La reconnaissance applique un passage standard
   (niveaux de gris et étirement global du contraste), recherche les lignes en mode texte épars,
-  puis relit la ligne retenue en mode bloc unique. Le numéro d'asset est recherché dans trois
+  puis relit la ligne retenue en mode bloc unique. Le numéro de série après `SN` ou `S/N` est recherché dans trois
   orientations (90°, 0°, 270°); le nom est recherché à 0° uniquement. Aucun second passage avec
   seuillage adaptatif n'est exécuté actuellement.
-4. Complétez éventuellement le numéro d'asset, le nom, le bureau/la salle et un commentaire.
+4. Complétez éventuellement le numéro de série, le nom, le bureau/la salle et un commentaire.
 5. Cliquez sur **"Ajouter à la liste"**.
 6. Répétez pour chaque PC non attaché trouvé.
 7. Pour corriger une ligne, cliquez sur **"Modifier"** dans la colonne Actions, modifiez les champs,
@@ -146,7 +146,7 @@ lang/             données de langue Tesseract (eng + fra), en local
 - Le scanner du nom utilise directement l'orientation normale ; la détection de la zone de texte
   prend néanmoins quelques secondes. Si la relecture de la ligne principale ne suffit pas, le moteur
   relit jusqu'à quatre lignes candidates en PSM 7 avant de conclure.
-- La reconnaissance du numéro d'asset et du nom est une **suggestion automatique** : relisez
+- La reconnaissance du numéro de série et du nom est une **suggestion automatique** : relisez
   toujours les champs avant d'ajouter une entrée à la liste.
 - Une image de nom détectée comme peu nette affiche un conseil de reprise; une proposition de nom
   partielle reste visible mais doit être vérifiée. Ces signaux ne garantissent pas l'exactitude.

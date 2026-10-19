@@ -12,7 +12,7 @@ const AUDIT_METADATA_STORAGE_KEY = 'audit-bureau-propre-metadata-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
-const APP_VERSION = '1.40.0';
+const APP_VERSION = '1.41.0';
 const TESSERACT_VERSION = '5.1.1';
 const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
 const SCAN_EVIDENCE_STORE_NAME = 'captures';
@@ -29,7 +29,7 @@ let activeScanAnalysisCount = 0;
 let scanAnalysisIdleResolver = null;
 let scanEvidenceWriteQueue = Promise.resolve();
 
-// ---------- Etat des deux zones de capture (asset / nom) ----------
+// ---------- Etat des deux zones de capture (étiquette / nom) ----------
 function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, liveVideoId, liveStatusId, stopLiveBtnId, fallbackInputId, ocrLoadingId, scanProgressId) {
   return {
     canvas: document.getElementById(canvasId),
@@ -407,14 +407,15 @@ function flattenLines(data) {
   return lines;
 }
 
-// Repère la ligne la plus probable pour un numéro d'asset ("Asset: XXXX" en priorité).
-function scoreAssetLines(lines) {
+const SERIAL_NUMBER_LABEL = /\bS\s*\/?\s*N\b/i;
+
+function scoreSerialNumberLines(lines) {
   let bestLine = null;
   let bestScore = -Infinity;
   for (const l of lines) {
-    let score = l.confidence;
-    if (/asset/i.test(l.text)) score += 200;
-    else if (!/\d/.test(l.text)) continue;
+    if (!SERIAL_NUMBER_LABEL.test(l.text)) continue;
+    let score = l.confidence + 200;
+    if (/\bS\s*\/?\s*N\b[ \t]*[:#=-]?[ \t]*[A-Z0-9][A-Z0-9-]{2,31}/i.test(l.text)) score += 50;
     if (score > bestScore) {
       bestScore = score;
       bestLine = l;
@@ -676,18 +677,15 @@ async function autoRecognize(
 }
 
 // ---------- Extraction heuristique ----------
-function extractAssetNumber(text) {
-  const cleaned = text.replace(/\r/g, '');
-  let m = cleaned.match(/asset[^A-Za-z0-9]{0,4}([A-Za-z0-9][A-Za-z0-9\-]{2,14})/i);
-  if (m) return normalizeAssetNumber(m[1]);
-  m = cleaned.match(/\b([A-Z5]{1,3}\d{4,8})\b/);
-  if (m) return normalizeAssetNumber(m[1]);
-  return '';
+function extractSerialNumber(text) {
+  const match = String(text || '').replace(/\r/g, '').match(
+    /\bS\s*\/?\s*N\b[ \t]*[:#=-]?[ \t]*([A-Z0-9][A-Z0-9-]{2,31})/i
+  );
+  return match ? normalizeSerialNumber(match[1]) : '';
 }
 
-function normalizeAssetNumber(value) {
-  const normalized = value.toUpperCase();
-  return normalized.startsWith('5') ? `S${normalized.slice(1)}` : normalized;
+function normalizeSerialNumber(value) {
+  return value.toUpperCase();
 }
 
 const NAME_STOPWORDS = /pour d[ée]verrouiller|options? de connexion|mot de passe|entrer|appuyez|glissez|touch id|face id|empreinte|verrouill|lecteur|analysez|doigt|windows|iphone|ipad|entsperren|password|pin\b/i;
@@ -733,13 +731,13 @@ function getNameSuggestion(text) {
 function getLiveConfig(state) {
   if (state === assetState) {
     return {
-      fieldId: 'unsecuredAsset',
+      fieldId: 'unsecuredSerialNumber',
       progressId: 'progressAsset',
       resultId: 'scanResultAsset',
       resultValueId: 'scanResultValueAsset',
       scanProgressId: 'scanProgressAsset',
-      score: scoreAssetLines,
-      extract: extractAssetNumber,
+      score: scoreSerialNumberLines,
+      extract: extractSerialNumber,
       detectOrientation: true,
     };
   }
@@ -990,7 +988,7 @@ async function startScanEvidenceRecord(state, config, image, liveCapture, origin
   const record = {
     id,
     capturedAt: new Date().toISOString(),
-    scanType: config.isName ? 'lock-screen-name' : 'asset-label',
+    scanType: config.isName ? 'lock-screen-name' : 'serial-number-label',
     source: liveCapture ? 'live-camera' : originalBlob ? 'camera-photo-picker' : 'image-input',
     status: 'processing',
     photoBlob,
@@ -1261,9 +1259,12 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
         state.liveResult.classList.toggle('scan-result-uncertain', uncertain);
         state.liveResultLabel.textContent = config.isName
           ? `${uncertain ? 'Suggestion partielle' : 'Suggestion OCR'} - toucher pour vérifier`
-          : 'Valeur détectée - toucher pour garder';
+          : 'N° de série détecté - toucher pour garder';
         state.liveResult.hidden = false;
-        state.liveStatus.textContent = `${uncertain ? 'Suggestion à vérifier.' : 'Valeur trouvée.'} Touchez l'encart pour confirmer, ou l'image pour rescanner. ${qualityNote}`.trim();
+        const foundMessage = config.isName
+          ? uncertain ? 'Suggestion à vérifier.' : 'Valeur trouvée.'
+          : 'Numéro de série trouvé.';
+        state.liveStatus.textContent = `${foundMessage} Touchez l'encart pour confirmer, ou l'image pour rescanner. ${qualityNote}`.trim();
       } else {
         document.getElementById(config.fieldId).value = value;
         document.getElementById(config.resultValueId).textContent = value;
@@ -1279,9 +1280,12 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
       const advice = lowSharpness
         ? ' Image peu nette : stabilisez le téléphone et rapprochez-vous.'
         : '';
+      const noValueMessage = config.isName
+        ? 'Aucun texte reconnu.'
+        : 'Aucun numéro de série (SN/S/N) détecté.';
       const message = liveCapture
-        ? `Aucun texte reconnu. Touchez l'image pour réessayer.${advice}`
-        : `Aucun texte reconnu. Relancez la capture pour réessayer.${advice}`;
+        ? `${noValueMessage} Touchez l'image pour réessayer.${advice}`
+        : `${noValueMessage} Relancez la capture pour réessayer.${advice}`;
       updateScanProgress(state, config, liveCapture, 100, message);
       if (liveCapture) flashLiveFailure(state);
       else flashScanFailure();
@@ -1565,7 +1569,7 @@ function prepareModalCapture(state) {
 function resetUnsecuredModal() {
   assetState.currentEvidenceId = null;
   nameState.currentEvidenceId = null;
-  document.getElementById('unsecuredAsset').value = '';
+  document.getElementById('unsecuredSerialNumber').value = '';
   document.getElementById('unsecuredName').value = '';
   document.getElementById('unsecuredComment').value = '';
   document.getElementById('unsecured-modal-title').textContent = 'Ajouter un PC non sécurisé';
@@ -1580,7 +1584,7 @@ function openUnsecuredModal(index = null) {
     if (!entry) return;
     editingUnsecuredIndex = index;
     document.getElementById('unsecured-modal-title').textContent = 'Modifier un PC non sécurisé';
-    document.getElementById('unsecuredAsset').value = entry.asset || '';
+    document.getElementById('unsecuredSerialNumber').value = entry.serialNumber || '';
     document.getElementById('unsecuredName').value = entry.nom || '';
     document.getElementById('unsecuredComment').value = entry.commentaire || '';
   }
@@ -1598,14 +1602,14 @@ document.getElementById('cancelUnsecured').addEventListener('click', () => {
   resetUnsecuredModal();
 });
 document.getElementById('confirmUnsecured').addEventListener('click', () => {
-  const asset = document.getElementById('unsecuredAsset').value.trim();
+  const serialNumber = document.getElementById('unsecuredSerialNumber').value.trim();
   const nom = document.getElementById('unsecuredName').value.trim();
   const commentaire = document.getElementById('unsecuredComment').value.trim();
-  if (!asset && !nom && !commentaire) {
+  if (!serialNumber && !nom && !commentaire) {
     alert('Renseignez au moins une information pour ce PC.');
     return;
   }
-  [[assetState, asset], [nameState, nom]].forEach(([state, value]) => {
+  [[assetState, serialNumber], [nameState, nom]].forEach(([state, value]) => {
     const evidence = scanEvidenceRecords.find((record) => record.id === state.currentEvidenceId);
     if (!evidence) return;
     evidence.confirmedValue = value || null;
@@ -1617,14 +1621,14 @@ document.getElementById('confirmUnsecured').addEventListener('click', () => {
     unsecuredEntries.push({
       date: now.toLocaleDateString('fr-FR'),
       heure: now.toLocaleTimeString('fr-FR'),
-      asset,
+      serialNumber,
       nom,
       commentaire,
     });
   } else {
     unsecuredEntries[editingUnsecuredIndex] = {
       ...unsecuredEntries[editingUnsecuredIndex],
-      asset,
+      serialNumber,
       nom,
       commentaire,
     };
@@ -1670,7 +1674,7 @@ function renderTable() {
     const index = unsecuredEntries.indexOf(entry);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(entry.asset)}</td>
+      <td>${escapeHtml(entry.serialNumber)}</td>
       <td>${escapeHtml(entry.nom)}</td>
       <td>${escapeHtml(entry.commentaire)}</td>
       <td>
@@ -1772,7 +1776,7 @@ function buildExportWorkbook() {
     Type: type,
     Date: values.date || '',
     Heure: values.heure || '',
-    'N° Asset': values.asset || '',
+    'N° de série': values.serialNumber || '',
     'Nom de la personne connectée': values.nom || '',
     'Bureau / Salle': values.bureau || '',
     Commentaire: values.commentaire || '',
@@ -1798,7 +1802,7 @@ function buildExportWorkbook() {
   ];
   const ws = XLSX.utils.json_to_sheet(rows);
   ws['!cols'] = [
-    { wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 28 }, { wch: 20 },
+    { wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 20 }, { wch: 28 }, { wch: 20 },
     { wch: 72 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 24 },
   ];
   const wb = XLSX.utils.book_new();

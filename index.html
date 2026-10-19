@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.40.0&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.41.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.40.0</span>
+  <span class="version-badge">Version 1.41.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -77,7 +77,7 @@
       <table id="entryTable">
         <thead>
           <tr>
-            <th>N° Asset</th><th>Nom</th><th>Commentaire</th><th>Actions</th>
+            <th>N° de série</th><th>Nom</th><th>Commentaire</th><th>Actions</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -122,8 +122,8 @@
       <button class="btn btn-live" id="scanUnsecuredAsset" type="button">Scanner l'étiquette</button>
       <button class="btn btn-live" id="scanUnsecuredName" type="button">Scanner l'écran de verrouillage</button>
     </div>
-    <label class="field-label" for="unsecuredAsset">N° Asset</label>
-    <input type="text" id="unsecuredAsset" placeholder="ex : S123456" autocomplete="off">
+    <label class="field-label" for="unsecuredSerialNumber">N° de série (SN / S/N)</label>
+    <input type="text" id="unsecuredSerialNumber" placeholder="ex : SN123456" autocomplete="off">
     <label class="field-label" for="unsecuredName">Nom de la personne connectée</label>
     <input type="text" id="unsecuredName" placeholder="ex : Paul DUGENOU" autocomplete="off">
     <label class="field-label" for="unsecuredComment">Commentaire</label>
@@ -173,7 +173,7 @@
       <progress max="100" value="0" aria-label="Avancement de la reconnaissance"></progress>
     </div>
     <div class="scan-result live-scan-result" hidden role="button" tabindex="0" aria-label="Garder la valeur détectée">
-      <span>Valeur détectée - toucher pour garder</span>
+      <span>N° de série détecté - toucher pour garder</span>
       <strong></strong>
     </div>
     <div class="camera-controls">
@@ -181,7 +181,7 @@
     </div>
   </div>
   <div class="scan-result support-only" id="scanResultAsset" hidden aria-live="polite">
-    <span>N° Asset détecté</span>
+    <span>N° de série détecté</span>
     <strong id="scanResultValueAsset"></strong>
   </div>
   <div class="canvas-wrap support-only" id="wrapAsset">
@@ -233,8 +233,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.40.0"></script>
-<script src="vendor/xlsx.full.min.js?v=1.40.0"></script>
-<script src="app.js?v=1.40.0"></script>
+<script src="vendor/tesseract.min.js?v=1.41.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.41.0"></script>
+<script src="app.js?v=1.41.0"></script>
 </body>
 </html>
