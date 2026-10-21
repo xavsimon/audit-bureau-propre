@@ -6,14 +6,14 @@
 <title>Audit Bureau Propre</title>
 <link id="appStylesheet" rel="stylesheet">
 <script>
-  const assetCacheKey = `v=1.41.0&reload=${Date.now()}`;
+  const assetCacheKey = `v=1.42.0&reload=${Date.now()}`;
   document.getElementById('appStylesheet').href = `styles.css?${assetCacheKey}`;
 </script>
 </head>
 <body>
 <header>
   <h1>🔒 Audit Bureau Propre</h1>
-  <span class="version-badge">Version 1.41.0</span>
+  <span class="version-badge">Version 1.42.0</span>
   <p class="subtitle">PC non attachés — saisie 100% locale, aucune donnée envoyée sur Internet</p>
 </header>
 
@@ -163,6 +163,10 @@
       <span>Ne touchez pas encore l'image.</span>
     </div>
     <video id="liveVideoAsset" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
+    <div class="live-crop-wrap" hidden>
+      <canvas class="live-crop-canvas" tabindex="0" aria-label="Photo figée à recadrer"></canvas>
+      <div class="crop-box live-crop-box" hidden></div>
+    </div>
     <div class="scan-frame" aria-hidden="true"></div>
     <div class="live-status" id="liveStatusAsset" aria-live="polite"></div>
     <div class="scan-progress" id="scanProgressAsset" hidden aria-live="polite">
@@ -177,6 +181,10 @@
       <strong></strong>
     </div>
     <div class="camera-controls">
+      <button class="btn manual-crop-button" type="button" hidden>Recadrer</button>
+      <button class="btn rotate-crop-button" type="button" aria-label="Tourner la photo de 90 degrés" hidden>Tourner 90°</button>
+      <button class="btn read-crop-button" type="button" hidden disabled>Lire la zone</button>
+      <button class="btn resume-video-button" type="button" hidden>Vidéo</button>
       <button class="btn btn-stop-live" id="stopLiveAsset" type="button">Arrêter</button>
     </div>
   </div>
@@ -205,6 +213,10 @@
       <span>Ne touchez pas encore l'image.</span>
     </div>
     <video id="liveVideoName" class="live-video" playsinline muted aria-label="Toucher l'écran pour prendre la photo"></video>
+    <div class="live-crop-wrap" hidden>
+      <canvas class="live-crop-canvas" tabindex="0" aria-label="Photo figée à recadrer"></canvas>
+      <div class="crop-box live-crop-box" hidden></div>
+    </div>
     <div class="scan-frame" aria-hidden="true"></div>
     <div class="live-status" id="liveStatusName" aria-live="polite"></div>
     <div class="scan-progress" id="scanProgressName" hidden aria-live="polite">
@@ -219,6 +231,10 @@
       <strong></strong>
     </div>
     <div class="camera-controls">
+      <button class="btn manual-crop-button" type="button" hidden>Recadrer</button>
+      <button class="btn rotate-crop-button" type="button" aria-label="Tourner la photo de 90 degrés" hidden>Tourner 90°</button>
+      <button class="btn read-crop-button" type="button" hidden disabled>Lire la zone</button>
+      <button class="btn resume-video-button" type="button" hidden>Vidéo</button>
       <button class="btn btn-stop-live" id="stopLiveName" type="button">Arrêter</button>
     </div>
   </div>
@@ -233,8 +249,8 @@
   <div class="progress support-only" id="progressName"></div>
 </div>
 
-<script src="vendor/tesseract.min.js?v=1.41.0"></script>
-<script src="vendor/xlsx.full.min.js?v=1.41.0"></script>
-<script src="app.js?v=1.41.0"></script>
+<script src="vendor/tesseract.min.js?v=1.42.0"></script>
+<script src="vendor/xlsx.full.min.js?v=1.42.0"></script>
+<script src="app.js?v=1.42.0"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@ const AUDIT_METADATA_STORAGE_KEY = 'audit-bureau-propre-metadata-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
-const APP_VERSION = '1.41.0';
+const APP_VERSION = '1.42.0';
 const TESSERACT_VERSION = '5.1.1';
 const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
 const SCAN_EVIDENCE_STORE_NAME = 'captures';
@@ -44,6 +44,13 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveVideo: document.getElementById(liveVideoId),
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
+    liveCropWrap: document.getElementById(liveWrapId).querySelector('.live-crop-wrap'),
+    liveCropCanvas: document.getElementById(liveWrapId).querySelector('.live-crop-canvas'),
+    liveCropBox: document.getElementById(liveWrapId).querySelector('.live-crop-box'),
+    manualCropButton: document.getElementById(liveWrapId).querySelector('.manual-crop-button'),
+    rotateCropButton: document.getElementById(liveWrapId).querySelector('.rotate-crop-button'),
+    readCropButton: document.getElementById(liveWrapId).querySelector('.read-crop-button'),
+    resumeVideoButton: document.getElementById(liveWrapId).querySelector('.resume-video-button'),
     fallbackInput: document.getElementById(fallbackInputId),
     ocrLoading: document.getElementById(ocrLoadingId),
     scanProgress: document.getElementById(scanProgressId),
@@ -55,6 +62,8 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveStream: null,
     liveActive: false,
     liveBusy: false,
+    cropEditing: false,
+    cropStart: null,
     scanReady: false,
     liveStartupTimings: null,
     liveSaved: null,
@@ -100,8 +109,8 @@ function renderPreview(state) {
   updateCropBoxUI(state);
 }
 
-function updateCropBoxUI(state) {
-  const { cropBox, crop, canvas } = state;
+function updateCropBoxUI(state, canvas = state.canvas, cropBox = state.cropBox) {
+  const { crop } = state;
   if (!crop || !canvas.width) {
     cropBox.hidden = true;
     return;
@@ -112,6 +121,25 @@ function updateCropBoxUI(state) {
   cropBox.style.top = `${offY + crop.y * dispH}px`;
   cropBox.style.width = `${crop.w * dispW}px`;
   cropBox.style.height = `${crop.h * dispH}px`;
+}
+
+function renderLiveCropPreview(state) {
+  const { image, rotation, liveCropCanvas: canvas } = state;
+  if (!image) return;
+  const { width: imageWidth, height: imageHeight } = getImageDimensions(image);
+  if (!imageWidth || !imageHeight) return;
+  const swapped = rotation % 180 !== 0;
+  const width = swapped ? imageHeight : imageWidth;
+  const height = swapped ? imageWidth : imageHeight;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate((rotation * Math.PI) / 180);
+  ctx.drawImage(image, -imageWidth / 2, -imageHeight / 2, imageWidth, imageHeight);
+  ctx.restore();
+  updateCropBoxUI(state, canvas, state.liveCropBox);
 }
 
 // Le canvas est affiché avec `object-fit: contain` (CSS) : sa boîte peut donc
@@ -139,6 +167,14 @@ function imageDisplayRect(canvas) {
     offX = (rect.width - dispW) / 2;
   }
   return { rect, offX, offY, dispW, dispH };
+}
+
+function imagePointFromPointer(canvas, event) {
+  const { rect, offX, offY, dispW, dispH } = imageDisplayRect(canvas);
+  const x = (event.clientX - rect.left - offX) / dispW;
+  const y = (event.clientY - rect.top - offY) / dispH;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return { x: clamp01(x), y: clamp01(y) };
 }
 
 // Renforce localement les lettres sombres sur un fond clair sans dépendre de
@@ -290,9 +326,56 @@ function wireCapture(state) {
       acceptLiveResult(state, getLiveConfig(state));
       return;
     }
+    if (state.cropEditing && e.target.closest('.live-crop-wrap')) return;
     if (e.target.closest('button, .camera-controls, .scan-loading')) return;
     captureLivePhoto(state, getLiveConfig(state));
   });
+  state.manualCropButton.addEventListener('click', () => beginManualCrop(state));
+  state.rotateCropButton.addEventListener('click', () => rotateManualCrop(state));
+  state.readCropButton.addEventListener('click', () => recognizeManualCrop(state, getLiveConfig(state)));
+  state.resumeVideoButton.addEventListener('click', () => cancelManualCrop(state));
+  state.liveCropCanvas.addEventListener('pointerdown', (event) => {
+    if (!state.cropEditing || !state.image || state.liveBusy) return;
+    const point = imagePointFromPointer(state.liveCropCanvas, event);
+    if (!point) return;
+    state.cropStart = point;
+    state.crop = { x: point.x, y: point.y, w: 0, h: 0 };
+    state.liveCropCanvas.setPointerCapture(event.pointerId);
+    state.readCropButton.disabled = true;
+    event.preventDefault();
+  });
+  state.liveCropCanvas.addEventListener('pointermove', (event) => {
+    if (!state.cropEditing || !state.cropStart || state.liveBusy) return;
+    const point = imagePointFromPointer(state.liveCropCanvas, event);
+    if (!point) return;
+    const start = state.cropStart;
+    state.crop = {
+      x: Math.min(start.x, point.x),
+      y: Math.min(start.y, point.y),
+      w: Math.abs(point.x - start.x),
+      h: Math.abs(point.y - start.y),
+    };
+    updateCropBoxUI(state, state.liveCropCanvas, state.liveCropBox);
+    state.readCropButton.disabled = !hasManualCrop(state.crop);
+  });
+  const finishCropSelection = (event) => {
+    if (!state.cropStart || state.liveBusy) return;
+    const point = imagePointFromPointer(state.liveCropCanvas, event);
+    if (point) {
+      const start = state.cropStart;
+      state.crop = {
+        x: Math.min(start.x, point.x),
+        y: Math.min(start.y, point.y),
+        w: Math.abs(point.x - start.x),
+        h: Math.abs(point.y - start.y),
+      };
+    }
+    state.cropStart = null;
+    updateCropBoxUI(state, state.liveCropCanvas, state.liveCropBox);
+    state.readCropButton.disabled = !hasManualCrop(state.crop);
+  };
+  state.liveCropCanvas.addEventListener('pointerup', finishCropSelection);
+  state.liveCropCanvas.addEventListener('pointercancel', finishCropSelection);
   state.liveWrap.addEventListener('keydown', (e) => {
     if (!e.target.closest('.live-scan-result') || !['Enter', ' '].includes(e.key)) return;
     e.preventDefault();
@@ -676,6 +759,142 @@ async function autoRecognize(
   return resultText;
 }
 
+function hasManualCrop(crop) {
+  return Boolean(crop && crop.w >= 0.025 && crop.h >= 0.025);
+}
+
+function beginManualCrop(state) {
+  if (!state.image || !state.liveActive || state.liveBusy) return;
+  state.cropEditing = true;
+  state.cropStart = null;
+  state.crop = null;
+  state.liveCropWrap.hidden = false;
+  state.manualCropButton.hidden = true;
+  state.rotateCropButton.hidden = false;
+  state.rotateCropButton.disabled = false;
+  state.readCropButton.hidden = false;
+  state.readCropButton.disabled = true;
+  state.resumeVideoButton.hidden = false;
+  state.resumeVideoButton.disabled = false;
+  state.liveResult.hidden = true;
+  renderLiveCropPreview(state);
+  state.liveStatus.textContent = 'Tracez un rectangle autour du texte à relire.';
+}
+
+function rotateManualCrop(state) {
+  if (!state.cropEditing || state.liveBusy) return;
+  state.rotation = (state.rotation + 90) % 360;
+  state.crop = null;
+  state.cropStart = null;
+  state.readCropButton.disabled = true;
+  renderLiveCropPreview(state);
+}
+
+function cancelManualCrop(state) {
+  if (state.liveBusy) return;
+  state.cropEditing = false;
+  state.cropStart = null;
+  state.crop = null;
+  state.liveCropWrap.hidden = true;
+  state.manualCropButton.hidden = !state.image;
+  state.rotateCropButton.hidden = true;
+  state.readCropButton.hidden = true;
+  state.resumeVideoButton.hidden = true;
+  state.liveResult.hidden = !state.liveResultValue.textContent;
+  state.liveStatus.textContent = 'Touchez l’image pour reprendre une photo.';
+}
+
+async function recognizeManualCrop(state, config) {
+  if (!state.liveActive || !state.image || !hasManualCrop(state.crop) || state.liveBusy) return;
+  const generation = state.analysisGeneration;
+  const startedAt = performance.now();
+  const selectedCrop = { ...state.crop };
+  const selectedRotation = state.rotation;
+  state.liveBusy = true;
+  state.readCropButton.disabled = true;
+  state.rotateCropButton.disabled = true;
+  state.resumeVideoButton.disabled = true;
+  updateScanProgress(state, config, true, 10, 'Lecture de la zone recadrée...');
+  try {
+    const data = await withOcrLock(async () => {
+      const worker = await getWorker();
+      await worker.setParameters({ tessedit_pageseg_mode: '6' });
+      const canvas = buildOcrCanvas(state, 'standard');
+      const { data: recognized } = await worker.recognize(canvas, {}, { text: true });
+      return recognized;
+    });
+    if (generation !== state.analysisGeneration || !state.liveActive) return;
+    const recognizedText = data.text || '';
+    const value = config.extract(recognizedText);
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    const evidence = scanEvidenceRecords.find((record) => record.id === state.currentEvidenceId);
+    const attempt = {
+      rotation: selectedRotation,
+      crop: selectedCrop,
+      pageSegmentationMode: 6,
+      preprocessing: 'grayscale + global min/max contrast stretch',
+      confidence: Number.isFinite(data.confidence) ? data.confidence : null,
+      recognizedTextLength: recognizedText.length,
+      extractedValueLength: value.length,
+      elapsedMs,
+    };
+    if (evidence) {
+      evidence.diagnostics.manualCropAttempts ||= [];
+      evidence.diagnostics.manualCropAttempts.push(attempt);
+      evidence.elapsedMs = (evidence.elapsedMs || 0) + elapsedMs;
+      evidence.finishedAt = new Date().toISOString();
+      if (value) {
+        evidence.recognizedText = recognizedText;
+        evidence.extractedValue = value;
+        evidence.confidence = attempt.confidence;
+        evidence.uncertain = Boolean(config.isUncertain?.(value));
+        evidence.status = evidence.uncertain ? 'value-uncertain' : 'value-found';
+      }
+      void persistScanEvidenceRecord(evidence);
+    }
+    resetScanProgress(state, config);
+    if (value) {
+      const uncertain = Boolean(config.isUncertain?.(value));
+      state.liveResultValue.textContent = value;
+      state.liveResultLabel.textContent = config.isName
+        ? `${uncertain ? 'Suggestion partielle' : 'Suggestion OCR'} - toucher pour vérifier`
+        : 'N° de série détecté - toucher pour garder';
+      state.liveResult.classList.toggle('scan-result-uncertain', uncertain);
+      state.liveResult.hidden = false;
+      state.liveStatus.textContent = 'Valeur relue dans la zone. Touchez l’encart pour vérifier.';
+      flashScanSuccess();
+    } else {
+      state.liveStatus.textContent = config.isName
+        ? 'Aucun nom reconnu dans cette zone. Tournez ou recadrez puis réessayez.'
+        : 'Aucun numéro de série reconnu dans cette zone. Tournez ou recadrez puis réessayez.';
+      flashLiveFailure(state);
+    }
+  } catch (error) {
+    resetScanProgress(state, config);
+    state.liveStatus.textContent = 'Relecture impossible. Vérifiez le cadrage puis réessayez.';
+    const evidence = scanEvidenceRecords.find((record) => record.id === state.currentEvidenceId);
+    if (evidence) {
+      evidence.diagnostics.manualCropAttempts ||= [];
+      evidence.diagnostics.manualCropAttempts.push({
+        rotation: selectedRotation,
+        crop: selectedCrop,
+        pageSegmentationMode: 6,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        error: String(error?.message || error),
+      });
+      void persistScanEvidenceRecord(evidence);
+    }
+  } finally {
+    if (generation === state.analysisGeneration) {
+      state.liveBusy = false;
+      state.readCropButton.disabled = !hasManualCrop(state.crop);
+      state.rotateCropButton.disabled = false;
+      state.resumeVideoButton.disabled = false;
+      updateCaptureButtons(state);
+    }
+  }
+}
+
 // ---------- Extraction heuristique ----------
 function extractSerialNumber(text) {
   const match = String(text || '').replace(/\r/g, '').match(
@@ -711,16 +930,15 @@ function extractName(text) {
     .filter((l) => !NAME_STOPWORDS.test(l));
   if (!lines.length) return '';
   lines.sort((a, b) => scoreNameLine(b) - scoreNameLine(a));
-  // Ne garde que la suite de "mots de nom" en tête de ligne (Capitalisé ou
-  // TOUT EN MAJUSCULES) ; s'arrête au premier résidu OCR (ponctuation, lettre
-  // isolée...) du type "Paul DUGENOU - à".
+  // Ne garde que les mots de nom valides en tête de ligne; un résidu OCR initial
+  // ne doit pas être renvoyé comme s'il s'agissait d'un nom.
   const wordRe = /^[A-ZÀ-Ý]([a-zà-ÿ]+|[A-ZÀ-Ý]*)$/;
   const kept = [];
   for (const tok of lines[0].split(/\s+/)) {
     if (!wordRe.test(tok)) break;
     kept.push(tok);
   }
-  return kept.join(' ') || lines[0];
+  return kept.join(' ');
 }
 
 function getNameSuggestion(text) {
@@ -814,6 +1032,13 @@ function stopLiveScan(state, restore = true) {
   state.liveActive = false;
   state.liveBusy = false;
   state.scanReady = false;
+  state.cropEditing = false;
+  state.cropStart = null;
+  state.liveCropWrap.hidden = true;
+  state.manualCropButton.hidden = true;
+  state.rotateCropButton.hidden = true;
+  state.readCropButton.hidden = true;
+  state.resumeVideoButton.hidden = true;
   if (state.liveStream) {
     state.liveStream.getTracks().forEach((track) => track.stop());
     state.liveStream = null;
@@ -1085,6 +1310,13 @@ function clearLiveResult(state, config) {
     ? 'Nom OCR - toucher pour vérifier'
     : 'Valeur détectée - toucher pour garder';
   state.liveResultValue.textContent = '';
+  state.cropEditing = false;
+  state.cropStart = null;
+  state.liveCropWrap.hidden = true;
+  state.manualCropButton.hidden = true;
+  state.rotateCropButton.hidden = true;
+  state.readCropButton.hidden = true;
+  state.resumeVideoButton.hidden = true;
   resetScanProgress(state, config);
 }
 
@@ -1317,6 +1549,7 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
     }
     if (analysisGeneration === state.analysisGeneration) {
       state.liveBusy = false;
+      if (liveCapture && state.liveActive && state.image) state.manualCropButton.hidden = false;
       updateCaptureButtons(state);
     }
     activeScanAnalysisCount -= 1;
@@ -2045,6 +2278,8 @@ function buildScanEvidenceReport(records) {
         maxUpscale: 4,
         assetRotations: ROTATIONS,
         nameRotations: [0],
+        manualCropPageSegmentationMode: 6,
+        manualCropAvailable: true,
         nameLowSharpnessAdviceThreshold: NAME_LOW_SHARPNESS_VARIANCE,
       },
     },

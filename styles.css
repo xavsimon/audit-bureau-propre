@@ -313,6 +313,25 @@ main {
   cursor: pointer;
 }
 
+.live-crop-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: #111;
+  touch-action: none;
+}
+
+.live-crop-wrap[hidden] { display: none; }
+
+.live-crop-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: crosshair;
+  touch-action: none;
+}
+
 .scan-frame {
   position: absolute;
   left: 8%;
@@ -410,6 +429,7 @@ main {
   position: relative;
   z-index: 4;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   width: 100%;
   padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
@@ -417,7 +437,8 @@ main {
 }
 
 .camera-controls .btn {
-  flex: 1;
+  flex: 1 1 calc(50% - 5px);
+  min-width: 0;
   min-height: 48px;
 }
 

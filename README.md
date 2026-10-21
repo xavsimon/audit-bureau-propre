@@ -1,10 +1,10 @@
-# Audit Bureau Propre — version 1.41.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.42.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
 premier, puis 0° et 270°, jamais à l'envers) et lecture
-du numéro de série (SN/S/N) ou du nom, puis export Excel en fin d'audit. Aucun recadrage ni rotation manuelle
-n'est nécessaire en usage normal.
+du numéro de série (SN/S/N) ou du nom, puis export Excel en fin d'audit. Une reprise par recadrage et
+rotation manuels est disponible si la première lecture ne convient pas.
 
 ## Confidentialité
 
@@ -74,8 +74,10 @@ Deux façons simples de faire cela, au choix :
   deux autres orientations. Seules les lignes portant `SN` ou `S/N` sont retenues; le numéro d'asset n'est pas utilisé comme repli. Si le numéro de série est
   trouvé, un encart vert s'affiche en bas du scanner. Touchez cet encart pour garder la valeur et
   fermer le scanner ; touchez l'image pour refaire le scan. Si rien n'est trouvé, l'écran flashe en
-  rouge et vous pouvez retoucher l'image pour réessayer. Pendant une
-  reconnaissance, touchez à nouveau l'image pour reprendre une photo : l'ancien résultat et sa
+  rouge et vous pouvez retoucher l'image pour réessayer. Le bouton **Recadrer** fige la photo;
+  tracez un rectangle autour de l'étiquette, tournez l'image si nécessaire, puis choisissez **Lire la zone**.
+  La valeur relue reste une suggestion à confirmer. Pendant une reconnaissance, touchez à nouveau l'image
+  pour reprendre une photo : l'ancien résultat et sa
   vérification sont effacés. Utilisez **Arrêter** pour quitter ce mode.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image.
 3. **Écran de verrouillage** : utilisez le scanner live de la même façon, en attendant
@@ -83,15 +85,17 @@ Deux façons simples de faire cela, au choix :
   l'orientation normale, sans recherche de rotation ; une barre indique l'avancement de la
   reconnaissance et le scan se ferme si le nom est trouvé.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image. Le nom est pré-rempli
-  automatiquement ; vérifiez/corrigez si besoin. Lorsqu'un nom est trouvé, touchez l'encart vert
+  automatiquement ; vérifiez/corrigez si besoin. Si la lecture est absente ou incorrecte, utilisez
+  **Recadrer**, tracez une zone serrée autour du nom affiché, puis choisissez **Lire la zone**. Lorsqu'un nom est trouvé, touchez l'encart vert
   pour le garder et fermer le scanner, ou touchez l'image pour refaire le scan.
 
   Le moteur OCR est préchargé en arrière-plan après l'ouverture de la fenêtre principale afin de
   réduire l'attente au démarrage du premier scan. La reconnaissance applique un passage standard
   (niveaux de gris et étirement global du contraste), recherche les lignes en mode texte épars,
   puis relit la ligne retenue en mode bloc unique. Le numéro de série après `SN` ou `S/N` est recherché dans trois
-  orientations (90°, 0°, 270°); le nom est recherché à 0° uniquement. Aucun second passage avec
-  seuillage adaptatif n'est exécuté actuellement.
+  orientations (90°, 0°, 270°); le nom est recherché à 0° uniquement. Une reprise manuelle relit la
+  zone dessinée en PSM 6 après rotation. Les diagnostics de cette reprise ne recopient pas les textes
+  alternatifs dans le journal, et toute valeur reste à vérifier.
 4. Complétez éventuellement le numéro de série, le nom, le bureau/la salle et un commentaire.
 5. Cliquez sur **"Ajouter à la liste"**.
 6. Répétez pour chaque PC non attaché trouvé.
@@ -150,5 +154,6 @@ lang/             données de langue Tesseract (eng + fra), en local
   toujours les champs avant d'ajouter une entrée à la liste.
 - Une image de nom détectée comme peu nette affiche un conseil de reprise; une proposition de nom
   partielle reste visible mais doit être vérifiée. Ces signaux ne garantissent pas l'exactitude.
-- Si l'étiquette/l'écran n'est pas détecté automatiquement (éclairage difficile, reflet...),
-  utilisez le bloc "Réglage manuel" pour tourner l'image et dessiner vous-même le cadre.
+- La reprise par recadrage ne répare pas une photo floue ou un sujet hors cadre; rapprochez-vous,
+  stabilisez le téléphone et reprenez la photo si le texte reste illisible. Le taux d'exactitude doit
+  être mesuré sur un jeu annoté avant d'annoncer un objectif chiffré.
