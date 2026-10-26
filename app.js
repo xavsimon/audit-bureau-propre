@@ -12,7 +12,7 @@ const AUDIT_METADATA_STORAGE_KEY = 'audit-bureau-propre-metadata-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
-const APP_VERSION = '1.43.0';
+const APP_VERSION = '1.44.0';
 const TESSERACT_VERSION = '5.1.1';
 const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
 const SCAN_EVIDENCE_STORE_NAME = 'captures';
@@ -45,6 +45,7 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveStatus: document.getElementById(liveStatusId),
     stopLiveBtn: document.getElementById(stopLiveBtnId),
     liveCropWrap: document.getElementById(liveWrapId).querySelector('.live-crop-wrap'),
+    liveCropStage: document.getElementById(liveWrapId).querySelector('.live-crop-stage'),
     liveCropCanvas: document.getElementById(liveWrapId).querySelector('.live-crop-canvas'),
     liveCropBox: document.getElementById(liveWrapId).querySelector('.live-crop-box'),
     manualCropButton: document.getElementById(liveWrapId).querySelector('.manual-crop-button'),
@@ -64,6 +65,11 @@ function createCaptureState(canvasId, wrapId, cropBoxId, liveBtnId, liveWrapId, 
     liveBusy: false,
     cropEditing: false,
     cropStart: null,
+    // Pincement à deux doigts : zoom (échelle) et translation (px) du calque de cadrage.
+    cropBeforeSelection: null,
+    cropPointers: new Map(),
+    cropPinch: null,
+    view: { scale: 1, x: 0, y: 0 },
     scanReady: false,
     liveStartupTimings: null,
     liveSaved: null,
@@ -117,8 +123,10 @@ function updateCropBoxUI(state, canvas = state.canvas, cropBox = state.cropBox) 
   }
   cropBox.hidden = false;
   const { offX, offY, dispW, dispH } = imageDisplayRect(canvas);
-  cropBox.style.left = `${offX + crop.x * dispW}px`;
-  cropBox.style.top = `${offY + crop.y * dispH}px`;
+  // Le calque de cadrage peut être déplacé et zoomé : le cadre, hors calque, suit sa translation (px écran).
+  const shift = canvas === state.liveCropCanvas ? state.view : { x: 0, y: 0 };
+  cropBox.style.left = `${shift.x + offX + crop.x * dispW}px`;
+  cropBox.style.top = `${shift.y + offY + crop.y * dispH}px`;
   cropBox.style.width = `${crop.w * dispW}px`;
   cropBox.style.height = `${crop.h * dispH}px`;
 }
@@ -139,6 +147,7 @@ function renderLiveCropPreview(state) {
   ctx.rotate((rotation * Math.PI) / 180);
   ctx.drawImage(image, -imageWidth / 2, -imageHeight / 2, imageWidth, imageHeight);
   ctx.restore();
+  resetCropView(state);
   updateCropBoxUI(state, canvas, state.liveCropBox);
 }
 
@@ -334,18 +343,32 @@ function wireCapture(state) {
   state.rotateCropButton.addEventListener('click', () => rotateManualCrop(state));
   state.readCropButton.addEventListener('click', () => recognizeManualCrop(state, getLiveConfig(state)));
   state.resumeVideoButton.addEventListener('click', () => cancelManualCrop(state));
-  state.liveCropCanvas.addEventListener('pointerdown', (event) => {
-    if (!state.cropEditing || !state.image || state.liveBusy) return;
+  // iOS Safari : empêche le zoom natif de la page pendant le pincement sur le cadrage.
+  state.liveCropWrap.addEventListener('gesturestart', (event) => event.preventDefault());
+  state.liveCropWrap.addEventListener('pointerdown', (event) => {
+    if (!state.cropEditing || !state.image || state.liveBusy || state.cropPointers.size >= 2) return;
+    state.cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    state.liveCropWrap.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    if (state.cropPointers.size === 2) {
+      startCropPinch(state);
+      return;
+    }
+    state.cropBeforeSelection = state.crop;
     const point = imagePointFromPointer(state.liveCropCanvas, event);
     if (!point) return;
     state.cropStart = point;
     state.crop = { x: point.x, y: point.y, w: 0, h: 0 };
-    state.liveCropCanvas.setPointerCapture(event.pointerId);
     state.readCropButton.disabled = true;
-    event.preventDefault();
   });
-  state.liveCropCanvas.addEventListener('pointermove', (event) => {
-    if (!state.cropEditing || !state.cropStart || state.liveBusy) return;
+  state.liveCropWrap.addEventListener('pointermove', (event) => {
+    if (!state.cropEditing || !state.cropPointers.has(event.pointerId)) return;
+    state.cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (state.cropPinch) {
+      applyCropPinch(state);
+      return;
+    }
+    if (!state.cropStart || state.liveBusy) return;
     const point = imagePointFromPointer(state.liveCropCanvas, event);
     if (!point) return;
     const start = state.cropStart;
@@ -374,8 +397,16 @@ function wireCapture(state) {
     updateCropBoxUI(state, state.liveCropCanvas, state.liveCropBox);
     state.readCropButton.disabled = !hasManualCrop(state.crop);
   };
-  state.liveCropCanvas.addEventListener('pointerup', finishCropSelection);
-  state.liveCropCanvas.addEventListener('pointercancel', finishCropSelection);
+  const releaseCropPointer = (event) => {
+    if (!state.cropPointers.delete(event.pointerId)) return;
+    if (state.cropPinch) {
+      if (state.cropPointers.size < 2) state.cropPinch = null;
+      return;
+    }
+    finishCropSelection(event);
+  };
+  state.liveCropWrap.addEventListener('pointerup', releaseCropPointer);
+  state.liveCropWrap.addEventListener('pointercancel', releaseCropPointer);
   state.liveWrap.addEventListener('keydown', (e) => {
     if (!e.target.closest('.live-scan-result') || !['Enter', ' '].includes(e.key)) return;
     e.preventDefault();
@@ -903,6 +934,58 @@ async function runScanOcr(state, config, { isCurrent, reportProgress, attempts }
 
 function hasManualCrop(crop) {
   return Boolean(crop && crop.w >= 0.025 && crop.h >= 0.025);
+}
+
+const MAX_CROP_ZOOM = 4;
+
+function applyCropView(state, view) {
+  state.view = view;
+  state.liveCropStage.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  // Le cadre (hors calque) suit l'image pendant le pincement.
+  updateCropBoxUI(state, state.liveCropCanvas, state.liveCropBox);
+}
+
+function resetCropView(state) {
+  state.cropPointers.clear();
+  state.cropPinch = null;
+  applyCropView(state, { scale: 1, x: 0, y: 0 });
+}
+
+// Pincement : le cadre déjà tracé est conservé, et le point médian reste sur le même point de l'image.
+function startCropPinch(state) {
+  const [first, second] = state.cropPointers.values();
+  const wrapRect = state.liveCropWrap.getBoundingClientRect();
+  state.cropStart = null;
+  state.crop = state.cropBeforeSelection;
+  updateCropBoxUI(state, state.liveCropCanvas, state.liveCropBox);
+  state.readCropButton.disabled = !hasManualCrop(state.crop);
+  state.cropPinch = {
+    distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+    scale: state.view.scale,
+    x: state.view.x,
+    y: state.view.y,
+    midX: (first.x + second.x) / 2 - wrapRect.left,
+    midY: (first.y + second.y) / 2 - wrapRect.top,
+  };
+}
+
+function applyCropPinch(state) {
+  const pinch = state.cropPinch;
+  const [first, second] = state.cropPointers.values();
+  const wrapRect = state.liveCropWrap.getBoundingClientRect();
+  const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+  const scale = Math.min(MAX_CROP_ZOOM, Math.max(1, (pinch.scale * distance) / pinch.distance));
+  const ratio = scale / pinch.scale;
+  const midX = (first.x + second.x) / 2 - wrapRect.left;
+  const midY = (first.y + second.y) / 2 - wrapRect.top;
+  // Le calque zoomé doit toujours couvrir la zone de cadrage : la translation est bornée.
+  const x = midX - ratio * (pinch.midX - pinch.x);
+  const y = midY - ratio * (pinch.midY - pinch.y);
+  applyCropView(state, {
+    scale,
+    x: Math.min(0, Math.max(wrapRect.width * (1 - scale), x)),
+    y: Math.min(0, Math.max(wrapRect.height * (1 - scale), y)),
+  });
 }
 
 function beginManualCrop(state) {

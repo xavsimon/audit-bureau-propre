@@ -1,4 +1,4 @@
-# Audit Bureau Propre — version 1.43.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.44.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
 scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (0° en
@@ -75,7 +75,7 @@ Deux façons simples de faire cela, au choix :
   trouvé, un encart vert s'affiche en bas du scanner. Touchez cet encart pour garder la valeur et
   fermer le scanner ; touchez l'image pour refaire le scan. Si rien n'est trouvé, l'écran flashe en
   rouge et vous pouvez retoucher l'image pour réessayer. Le bouton **Recadrer** fige la photo;
-  tracez un rectangle autour de l'étiquette, tournez l'image si nécessaire, puis choisissez **Lire la zone**.
+  pincez l'image à deux doigts pour la zoomer, tracez un rectangle autour de l'étiquette, tournez l'image si nécessaire, puis choisissez **Lire la zone**.
   La valeur relue reste une suggestion à confirmer. Pendant une reconnaissance, touchez à nouveau l'image
   pour reprendre une photo : l'ancien résultat et sa
   vérification sont effacés. Utilisez **Arrêter** pour quitter ce mode.
@@ -86,7 +86,7 @@ Deux façons simples de faire cela, au choix :
   reconnaissance et le scan se ferme si le nom est trouvé.
   Le bloc **Photo capturée** permet ensuite de replier l'aperçu de l'image. Le nom est pré-rempli
   automatiquement ; vérifiez/corrigez si besoin. Si la lecture est absente ou incorrecte, utilisez
-  **Recadrer**, tracez une zone serrée autour du nom affiché, puis choisissez **Lire la zone**. Lorsqu'un nom est trouvé, touchez l'encart vert
+  **Recadrer**, pincez l'image à deux doigts pour la zoomer, tracez une zone serrée autour du nom affiché, puis choisissez **Lire la zone**. Lorsqu'un nom est trouvé, touchez l'encart vert
   pour le garder et fermer le scanner, ou touchez l'image pour refaire le scan.
 
   Le moteur OCR est préchargé en arrière-plan après l'ouverture de la fenêtre principale afin de

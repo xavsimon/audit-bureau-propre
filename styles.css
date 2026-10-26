@@ -317,11 +317,19 @@ main {
   position: absolute;
   inset: 0;
   z-index: 3;
+  overflow: hidden;
   background: #111;
   touch-action: none;
 }
 
 .live-crop-wrap[hidden] { display: none; }
+
+/* Calque zoomable (pincement à deux doigts) : seule l'image est transformée, le cadre garde son échelle écran. */
+.live-crop-stage {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
 
 .live-crop-canvas {
   display: block;
