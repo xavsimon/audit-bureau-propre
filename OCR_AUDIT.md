@@ -1,5 +1,28 @@
 # Audit OCR - Audit Bureau Propre
 
+## Mesures du 2026-10-26 — code publié en version 1.43.0
+
+Banc de mesure local, hors dépôt, qui appelle `runScanOcr` (même point d'entrée que l'application) sur l'archive locale de 43 captures. Vérité terrain : 6 étiquettes série et 12 noms. Ce jeu est petit et n'est pas représentatif ; les 34 autres photos n'ont pas de vérité terrain et ne sont pas mesurées.
+
+| Version | Étiquettes exactes | Noms exacts | Noms proches | Temps moyen étiquette / nom |
+| --- | --- | --- | --- | --- |
+| Référence 1.42.0 | 1/6 (16,7 %) | 2/12 (16,7 %) | 0 | 2103 ms / 831 ms |
+| Passes multiples et reprise nom (v2-2400) | 6/6 (100 %) | 2/12 (16,7 %) | 0 | 3765 ms / 1290 ms |
+| Version retenue (v3-B) | 6/6 (100 %) | 2/12 (16,7 %) | 1 | 3666 ms / 1273 ms |
+
+Modifications retenues (publiées en version 1.43.0) :
+- Étiquettes : rotations 0°, 270° et 90°, combinées aux modes de segmentation 11 et 6, avec arrêt anticipé dès qu'une valeur plausible atteint une confiance de 85. Plafond de résolution porté de 1800 px à 2400 px sur le grand côté.
+- Extraction : marqueur S/N toléré (variantes S/N, SN, $N et 5N), valeur sur la même ligne ou au début de la ligne suivante, numéros d'asset exclus.
+- Noms : si aucune valeur n'est trouvée, reprise avec prétraitement adaptatif. Repli sur la ligne détectée seulement si sa confiance est d'au moins 60 et qu'elle contient au moins deux mots.
+
+Testé et annulé :
+- Agrandissement des photos de nom à 2400 px : 1/12 exact, 2 proches, 20,9 s sur une photo. La lecture des noms se dégrade.
+
+Limites connues :
+- Les photos de nom en portrait (720 × 1280) ne sont pas lues : les lignes détectées sont du bruit d'image. Aucune rotation (0°, 90°, 270°, ±6° à ±20°), aucun prétraitement (adaptatif, inversion, top-hat blanc ou noir), aucune échelle (1800 à 3200 px), aucun mode de segmentation (4, 6, 7, 11) et aucune découpe en bandes ne les récupère  : aucun nom portrait exact sur 5 vérités ; un seul cas partiel (0042 à −6°, distance ≤ 2), non reproduit sur les autres angles (recherche hors dépôt du 2026-10-26). Le recadrage manuel est la voie prévue. Borne supérieure mesurée avec une fenêtre choisie a posteriori (vérité terrain ; 185 puis 261 fenêtres par portrait) : aucun nom exact ; un cas proche sur 0042 (distance 1, deux fragments) pour une bande serrée à droite (largeur 40 %, hauteur 7 %, y 18 à 25 %). Une zone commune élargie (x 50 à 100 %, y 12 à 30 %) ne donne rien sur les quatre autres portraits (distance minimale 8). Non intégré : un seul cas, sélectionné a posteriori. Un top-hat blanc (rayon 16 px à ×2) porte le témoin paysage 0022 à 2/2 fragments en lecture brute, sans changer la sortie de l'application (0009 et 0022 déjà exacts en v3-B) : non intégré.
+- Temps : jusqu'à 11 s sur une photo de 4032 × 3024 sans vérité terrain. Aucun test sur téléphone.
+- Les orientations et modes de segmentation ci-dessus remplacent ceux décrits dans les sections antérieures.
+
 ## Mise à jour du 2026-10-21 — version 1.42.0
 
 Le scanner live permet maintenant de figer la photo, de tracer une ROI, de la tourner par pas de 90° et de la relire en PSM 6. Les essais exploratoires sur l’archive locale de 43 captures ne justifient pas une promesse de 90 %: 10 captures concernent les étiquettes (1 valeur proposée, 9 sans valeur) et 33 les noms (26 valeurs proposées, 4 suggestions incertaines, 3 sans valeur). Ces statuts ne sont pas des mesures d’exactitude.

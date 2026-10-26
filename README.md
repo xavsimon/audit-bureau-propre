@@ -1,8 +1,8 @@
-# Audit Bureau Propre — version 1.42.0 (OCR + export Excel)
+# Audit Bureau Propre — version 1.43.0 (OCR + export Excel)
 
 Application web (HTML/JS) pour réaliser vos audits "bureau propre" avec votre téléphone :
-scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (90° en
-premier, puis 0° et 270°, jamais à l'envers) et lecture
+scanner plein écran au toucher de l'image → analyse **automatique** de trois orientations (0° en
+premier, puis 270° et 90°, jamais à l'envers) et lecture
 du numéro de série (SN/S/N) ou du nom, puis export Excel en fin d'audit. Une reprise par recadrage et
 rotation manuels est disponible si la première lecture ne convient pas.
 
@@ -70,8 +70,8 @@ Deux façons simples de faire cela, au choix :
 2. **Étiquette de numéro de série** : démarrez le **scanner live** ; la caméra s'ouvre en plein écran. Attendez
   la fin de l'initialisation OCR, puis cadrez l'étiquette et touchez l'image pour déclencher l'analyse.
   Un indicateur plein écran reste visible pendant le chargement de la caméra et de l'OCR : attendez
-  qu'il disparaisse avant de toucher l'image. La reconnaissance commence par 90°, puis teste les
-  deux autres orientations. Seules les lignes portant `SN` ou `S/N` sont retenues; le numéro d'asset n'est pas utilisé comme repli. Si le numéro de série est
+  qu'il disparaisse avant de toucher l'image. La reconnaissance commence par 0°, puis teste 270° et 90°.
+  Seules les lignes portant un marqueur `SN` ou `S/N` (variantes OCR comme « $N » ou « 5N » tolérées) sont retenues, la valeur pouvant figurer sur la ligne suivante ; le numéro d'asset n'est pas utilisé comme repli. Si le numéro de série est
   trouvé, un encart vert s'affiche en bas du scanner. Touchez cet encart pour garder la valeur et
   fermer le scanner ; touchez l'image pour refaire le scan. Si rien n'est trouvé, l'écran flashe en
   rouge et vous pouvez retoucher l'image pour réessayer. Le bouton **Recadrer** fige la photo;
@@ -92,8 +92,8 @@ Deux façons simples de faire cela, au choix :
   Le moteur OCR est préchargé en arrière-plan après l'ouverture de la fenêtre principale afin de
   réduire l'attente au démarrage du premier scan. La reconnaissance applique un passage standard
   (niveaux de gris et étirement global du contraste), recherche les lignes en mode texte épars,
-  puis relit la ligne retenue en mode bloc unique. Le numéro de série après `SN` ou `S/N` est recherché dans trois
-  orientations (90°, 0°, 270°); le nom est recherché à 0° uniquement. Une reprise manuelle relit la
+  puis relit la ligne retenue en mode bloc unique. Pour le numéro de série, les rotations 0°, 270° et 90° sont combinées aux modes 11 puis 6, avec arrêt dès qu'une confiance d'au moins 85 % est atteinte.
+  Pour le nom, la recherche se fait à 0° uniquement, avec une seconde tentative de prétraitement si aucune valeur n'est trouvée. Une reprise manuelle relit la
   zone dessinée en PSM 6 après rotation. Les diagnostics de cette reprise ne recopient pas les textes
   alternatifs dans le journal, et toute valeur reste à vérifier.
 4. Complétez éventuellement le numéro de série, le nom, le bureau/la salle et un commentaire.
@@ -143,10 +143,12 @@ lang/             données de langue Tesseract (eng + fra), en local
 
 ## Limites connues
 
-- Le scanner live de l'étiquette analyse une photo prise au toucher dans trois orientations (90° en
-  premier, puis 0° et 270° ; l'image à l'envers n'est pas testée). Un écran de
+- Le scanner live de l'étiquette analyse une photo prise au toucher dans trois orientations (0° en
+  premier, puis 270° et 90° ; l'image à l'envers n'est pas testée). Un écran de
   chargement bloque les clics jusqu'à ce que la caméra et l'OCR soient prêts.
   La première analyse est plus longue, le temps de charger le moteur OCR.
+- Sur le jeu de test, les photos de nom en portrait (720 × 1280) n'ont pas été lues : le meilleur recadrage testé n'a donné une valeur proche (à une lettre près) que sur une photo sur cinq, avec une zone serrée autour du nom. Relisez la valeur.
+- Temps mesurés sur PC, pas encore sur téléphone : environ 3,7 s par étiquette en moyenne, jusqu'à 11 s pour les grandes photos ; environ 1,3 s par nom.
 - Le scanner du nom utilise directement l'orientation normale ; la détection de la zone de texte
   prend néanmoins quelques secondes. Si la relecture de la ligne principale ne suffit pas, le moteur
   relit jusqu'à quatre lignes candidates en PSM 7 avant de conclure.

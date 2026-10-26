@@ -2,6 +2,9 @@
 IMG_6385.jpeg
 personne.jpg
 
+# Dossier d'exemples de photos (vrais noms et numéros d'asset) — ne pas publier.
+exemples/
+
 # Fichiers Excel exportés localement pendant les audits.
 audit_bureau_propre_*.xlsx
 

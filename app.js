@@ -12,7 +12,7 @@ const AUDIT_METADATA_STORAGE_KEY = 'audit-bureau-propre-metadata-v1';
 const AUDIT_STATS_STORAGE_KEY = 'audit-bureau-propre-stats-v1';
 const UNSECURED_ENTRIES_STORAGE_KEY = 'audit-bureau-propre-unsecured-v1';
 const OTHER_COMMENTS_STORAGE_KEY = 'audit-bureau-propre-other-v1';
-const APP_VERSION = '1.42.0';
+const APP_VERSION = '1.43.0';
 const TESSERACT_VERSION = '5.1.1';
 const SCAN_EVIDENCE_DB_NAME = 'audit-bureau-propre-scan-evidence-v1';
 const SCAN_EVIDENCE_STORE_NAME = 'captures';
@@ -226,7 +226,7 @@ function buildOcrCanvas(state, preprocess = 'standard') {
   const fullW = swapped ? imageHeight : imageWidth;
   const fullH = swapped ? imageWidth : imageHeight;
 
-  const MAX_DIM = 1800;
+  const MAX_DIM = OCR_MAX_DIM;
   const scale = Math.min(1, MAX_DIM / Math.max(fullW, fullH));
   const rotW = Math.round(fullW * scale);
   const rotH = Math.round(fullH * scale);
@@ -478,7 +478,15 @@ function withOcrLock(fn) {
 }
 
 // ---------- Détection automatique (orientation + zone de texte) ----------
-const ROTATIONS = [90, 0, 270];
+// Grand côté de travail avant recherche de texte. À 1800 px, le marqueur SN des
+// étiquettes est souvent trop petit pour être lu.
+const OCR_MAX_DIM = 2400;
+// Étiquette : orientations testées dans l'ordre, puis deux modes de segmentation
+// à chaque orientation (PSM 11 : texte épars ; PSM 6 : bloc uniforme).
+const SERIAL_ROTATIONS = [0, 270, 90];
+const SERIAL_PAGE_MODES = [11, 6];
+// Une valeur lue à cette confiance, ou retrouvée par deux passes, arrête la recherche.
+const SERIAL_ACCEPT_CONFIDENCE = 85;
 const clamp01 = (v) => Math.min(Math.max(v, 0), 1);
 
 function flattenLines(data) {
@@ -490,22 +498,6 @@ function flattenLines(data) {
   return lines;
 }
 
-const SERIAL_NUMBER_LABEL = /\bS\s*\/?\s*N\b/i;
-
-function scoreSerialNumberLines(lines) {
-  let bestLine = null;
-  let bestScore = -Infinity;
-  for (const l of lines) {
-    if (!SERIAL_NUMBER_LABEL.test(l.text)) continue;
-    let score = l.confidence + 200;
-    if (/\bS\s*\/?\s*N\b[ \t]*[:#=-]?[ \t]*[A-Z0-9][A-Z0-9-]{2,31}/i.test(l.text)) score += 50;
-    if (score > bestScore) {
-      bestScore = score;
-      bestLine = l;
-    }
-  }
-  return { line: bestLine, score: bestLine ? bestScore : -Infinity };
-}
 
 // Repère la ligne la plus probable pour un nom de personne (score OCR + heuristique de forme).
 function scoreNameLines(lines) {
@@ -538,13 +530,11 @@ function applyRecognitionCrop(state, candidate) {
   renderPreview(state);
 }
 
-// Repère la meilleure zone de texte puis la relit en haute qualité. L'étiquette
-// teste d'abord l'orientation la plus fréquente, puis les deux autres ; le nom
-// est traité directement à 0 degré.
+// Repère la zone du nom à 0 degré, puis la relit en haute qualité. L'étiquette
+// suit son propre parcours (voir recognizeSerialNumber).
 async function autoRecognize(
   state,
   scoreFn,
-  detectOrientation,
   onProgress,
   isCurrent,
   preprocess = 'standard',
@@ -561,19 +551,15 @@ async function autoRecognize(
   const worker = await getWorker();
   let best = null;
   const detectedCandidates = [];
-  const rotations = detectOrientation ? ROTATIONS : [0];
+  const rotations = [0];
 
   await worker.setParameters({ tessedit_pageseg_mode: '11' });
-  reportProgress(10, detectOrientation
-    ? 'Préparation des 3 orientations (90° en premier)...'
-    : preprocess === 'adaptive' ? 'Renforcement du contraste de l’écran...' : 'Recherche du nom...');
+  reportProgress(10, preprocess === 'adaptive' ? 'Renforcement du contraste de l’écran...' : 'Recherche du nom...');
   for (let i = 0; i < rotations.length; i += 1) {
     if (!isCurrent()) return '';
     const rotation = rotations[i];
     const percent = 15 + Math.round(((i + 1) / rotations.length) * 60);
-    const message = detectOrientation
-      ? `Reconnaissance de l'orientation... (${i + 1}/${rotations.length})`
-      : 'Reconnaissance du nom...';
+    const message = 'Reconnaissance du nom...';
     reportProgress(percent, message);
     state.rotation = rotation;
     state.crop = null;
@@ -668,6 +654,16 @@ async function autoRecognize(
     let bestSuggestionScore = bestSuggestion ? scoreNameLine(bestSuggestion) : -Infinity;
     const initialSuggestionScore = bestSuggestionScore;
     let suggestionCandidate = bestSuggestion ? best : null;
+    // La ligne repérée par la détection est une lecture indépendante : si elle est nette,
+    // elle sert de suggestion lorsque la relecture n'en donne pas de valable.
+    const detectedSuggestion = best.lineConfidence >= NAME_DETECTED_MIN_CONFIDENCE ? getNameSuggestion(best.lineText) : '';
+    // Un mot isolé n'est pas proposé à partir de la seule détection (prénom ou nom seul, bruit OCR).
+    const detectedSuggestionScore = detectedSuggestion.includes(' ') ? scoreNameLine(detectedSuggestion) : -Infinity;
+    if (detectedSuggestionScore > bestSuggestionScore) {
+      bestSuggestion = detectedSuggestion;
+      bestSuggestionScore = detectedSuggestionScore;
+      suggestionCandidate = best;
+    }
     const retryCandidates = detectedCandidates
       .sort((a, b) => b.score - a.score)
       .filter((candidate, index, candidates) => (
@@ -757,6 +753,152 @@ async function autoRecognize(
   }
   reportProgress(100, 'Reconnaissance terminée.');
   return resultText;
+}
+
+// Marqueur de numéro de série, avec les variantes lues par l'OCR : S/N, S N, SN, $N, 5N.
+const SERIAL_MARKER_RE = /(?:\bS\s*\/?\s*N|\$\s*N|\b5\s*N)\b/gi;
+// Valeur placée juste après le marqueur, après d'éventuels séparateurs.
+const SERIAL_VALUE_RE = /^[\s:.;|#=_,'"-]*([A-Z0-9][A-Z0-9-]{4,19})(?![A-Z0-9-])/i;
+
+// Un numéro de série mêle lettres et chiffres. Un numéro d'asset (S suivi de
+// 6 ou 7 chiffres) n'est jamais retenu comme numéro de série.
+function isPlausibleSerial(value) {
+  return value.length >= 6
+    && value.length <= 20
+    && /[A-Z]/.test(value)
+    && /\d/.test(value)
+    && !/^S\d{6,7}$/.test(value);
+}
+
+function serialValueAfter(text) {
+  const match = SERIAL_VALUE_RE.exec(text);
+  if (!match) return '';
+  const value = match[1].toUpperCase();
+  return isPlausibleSerial(value) ? value : '';
+}
+
+// Repère les numéros de série d'une passe OCR. Si le marqueur est seul sur sa
+// ligne, la valeur est recherchée au début de la ligne suivante.
+function findSerialCandidates(lines) {
+  const candidates = [];
+  lines.forEach((line, index) => {
+    const markers = [...line.text.matchAll(SERIAL_MARKER_RE)];
+    if (!markers.length) return;
+    for (const marker of markers) {
+      const value = serialValueAfter(line.text.slice(marker.index + marker[0].length));
+      if (value) {
+        candidates.push({ value, confidence: line.confidence, text: line.text });
+        return;
+      }
+    }
+    const next = lines[index + 1];
+    const nextValue = next ? serialValueAfter(next.text) : '';
+    if (nextValue) {
+      candidates.push({
+        value: nextValue,
+        confidence: Math.min(line.confidence, next.confidence),
+        text: `${line.text}\n${next.text}`,
+      });
+    }
+  });
+  return candidates;
+}
+
+// Regroupe les candidats par valeur. Une lecture à confiance élevée, ou une
+// valeur retrouvée par deux passes différentes, arrête la recherche.
+function pickSerialCandidate(candidates) {
+  const byValue = new Map();
+  for (const candidate of candidates) {
+    const entry = byValue.get(candidate.value) || { passes: new Set(), best: null };
+    entry.passes.add(`${candidate.rotation}-${candidate.psm}`);
+    if (!entry.best || candidate.confidence > entry.best.confidence) entry.best = candidate;
+    byValue.set(candidate.value, entry);
+  }
+  let winner = null;
+  for (const entry of byValue.values()) {
+    const support = entry.passes.size;
+    const score = entry.best.confidence + (support - 1) * 20;
+    if (!winner || score > winner.score) winner = { ...entry.best, support, score };
+  }
+  if (!winner) return null;
+  const accepted = winner.confidence >= SERIAL_ACCEPT_CONFIDENCE || winner.support >= 2;
+  return { ...winner, accepted };
+}
+
+// Lecture de l'étiquette : chaque orientation est lue à OCR_MAX_DIM avec les deux
+// modes de segmentation. La recherche s'arrête dès qu'une valeur est confirmée.
+async function recognizeSerialNumber(state, reportProgress, isCurrent, attempt) {
+  const worker = await getWorker();
+  const plan = SERIAL_ROTATIONS.flatMap((rotation) => SERIAL_PAGE_MODES.map((psm) => ({ rotation, psm })));
+  const candidates = [];
+  let decision = null;
+  let canvas = null;
+  let canvasRotation = null;
+  reportProgress(10, 'Recherche du numéro de série...');
+  for (let i = 0; i < plan.length; i += 1) {
+    if (!isCurrent()) return '';
+    const { rotation, psm } = plan[i];
+    reportProgress(15 + Math.round(((i + 1) / plan.length) * 75), `Lecture de l'étiquette... (${i + 1}/${plan.length})`);
+    if (rotation !== canvasRotation) {
+      state.rotation = rotation;
+      state.crop = null;
+      canvas = buildOcrCanvas(state, 'standard');
+      canvasRotation = rotation;
+    }
+    await worker.setParameters({ tessedit_pageseg_mode: String(psm) });
+    const recognitionStartedAt = performance.now();
+    // eslint-disable-next-line no-await-in-loop
+    const { data } = await worker.recognize(canvas, {}, { blocks: true });
+    const recognitionMs = Math.round(performance.now() - recognitionStartedAt);
+    if (!isCurrent()) return '';
+    const lines = flattenLines(data);
+    candidates.push(...findSerialCandidates(lines).map((candidate) => ({ ...candidate, rotation, psm })));
+    decision = pickSerialCandidate(candidates);
+    attempt.rotations.push({
+      rotation,
+      psm,
+      imageWidth: canvas.width,
+      imageHeight: canvas.height,
+      recognitionMs,
+      lines: lines.map((item) => ({ text: item.text, confidence: item.confidence, bbox: item.bbox })),
+    });
+    if (decision?.accepted) break;
+  }
+  if (!decision) {
+    state.rotation = 0;
+    state.crop = null;
+    renderPreview(state);
+    return '';
+  }
+  attempt.selectedDetection = {
+    rotation: decision.rotation,
+    text: decision.text,
+    confidence: decision.confidence,
+    selectionScore: decision.score,
+    bbox: null,
+    stage: decision.accepted ? 'serial-confirmed' : 'serial-best',
+  };
+  attempt.refinement = { confidence: decision.confidence, text: decision.text };
+  state.rotation = decision.rotation;
+  state.crop = null;
+  renderPreview(state);
+  reportProgress(100, 'Reconnaissance terminée.');
+  return decision.text;
+}
+
+// Enchaîne les lectures d'un scan. Appelée dans withOcrLock, par l'analyse réelle
+// comme par le banc d'essai : les deux exécutent ainsi le même code.
+async function runScanOcr(state, config, { isCurrent, reportProgress, attempts }) {
+  const standardAttempt = { preprocessing: 'standard', rotations: [] };
+  attempts.push(standardAttempt);
+  if (config.isSerial) return recognizeSerialNumber(state, reportProgress, isCurrent, standardAttempt);
+  const standardText = await autoRecognize(
+    state, config.score, reportProgress, isCurrent, 'standard', 0, !config.retryPreprocess, standardAttempt
+  );
+  if (!config.retryPreprocess || config.extract(standardText)) return standardText;
+  const adaptiveAttempt = { preprocessing: 'adaptive', rotations: [] };
+  attempts.push(adaptiveAttempt);
+  return autoRecognize(state, config.score, reportProgress, isCurrent, 'adaptive', 80, true, adaptiveAttempt);
 }
 
 function hasManualCrop(crop) {
@@ -897,18 +1039,18 @@ async function recognizeManualCrop(state, config) {
 
 // ---------- Extraction heuristique ----------
 function extractSerialNumber(text) {
-  const match = String(text || '').replace(/\r/g, '').match(
-    /\bS\s*\/?\s*N\b[ \t]*[:#=-]?[ \t]*([A-Z0-9][A-Z0-9-]{2,31})/i
-  );
-  return match ? normalizeSerialNumber(match[1]) : '';
-}
-
-function normalizeSerialNumber(value) {
-  return value.toUpperCase();
+  const source = String(text || '').replace(/\r/g, '');
+  for (const marker of source.matchAll(SERIAL_MARKER_RE)) {
+    const value = serialValueAfter(source.slice(marker.index + marker[0].length));
+    if (value) return value;
+  }
+  return '';
 }
 
 const NAME_STOPWORDS = /pour d[ée]verrouiller|options? de connexion|mot de passe|entrer|appuyez|glissez|touch id|face id|empreinte|verrouill|lecteur|analysez|doigt|windows|iphone|ipad|entsperren|password|pin\b/i;
 const NAME_LOW_SHARPNESS_VARIANCE = 300;
+// Confiance minimale de la ligne détectée pour la proposer comme nom de secours.
+const NAME_DETECTED_MIN_CONFIDENCE = 60;
 
 function scoreNameLine(line) {
   const words = line.split(/\s+/).filter(Boolean);
@@ -954,9 +1096,8 @@ function getLiveConfig(state) {
       resultId: 'scanResultAsset',
       resultValueId: 'scanResultValueAsset',
       scanProgressId: 'scanProgressAsset',
-      score: scoreSerialNumberLines,
       extract: extractSerialNumber,
-      detectOrientation: true,
+      isSerial: true,
     };
   }
   return {
@@ -966,9 +1107,9 @@ function getLiveConfig(state) {
     resultValueId: 'scanResultValueName',
     scanProgressId: 'scanProgressName',
     score: scoreNameLines,
-    detectOrientation: false,
     extract: getNameSuggestion,
     isName: true,
+    retryPreprocess: true,
     isUncertain: (value) => scoreNameLine(value) < 2,
   };
 }
@@ -1433,35 +1574,11 @@ async function analyzeCapturedImage(state, config, image, liveCapture, originalB
       diagnostics.timings.ocrQueueWaitMs = Math.round(performance.now() - queuedAt);
       const pipelineStartedAt = performance.now();
       try {
-        const standardAttempt = { preprocessing: 'standard', rotations: [] };
-        diagnostics.attempts.push(standardAttempt);
-        let recognizedText = await autoRecognize(
-          state,
-          config.score,
-          config.detectOrientation,
+        return await runScanOcr(state, config, {
+          isCurrent: () => analysisGeneration === state.analysisGeneration,
           reportProgress,
-          () => analysisGeneration === state.analysisGeneration,
-          'standard',
-          0,
-          !config.retryPreprocess,
-          standardAttempt
-        );
-        if (config.retryPreprocess && !config.extract(recognizedText)) {
-          const adaptiveAttempt = { preprocessing: 'adaptive', rotations: [] };
-          diagnostics.attempts.push(adaptiveAttempt);
-          recognizedText = await autoRecognize(
-            state,
-            config.score,
-            config.detectOrientation,
-            reportProgress,
-            () => analysisGeneration === state.analysisGeneration,
-            'adaptive',
-            80,
-            true,
-            adaptiveAttempt
-          );
-        }
-        return recognizedText;
+          attempts: diagnostics.attempts,
+        });
       } finally {
         diagnostics.timings.ocrPipelineMs = Math.round(performance.now() - pipelineStartedAt);
       }
@@ -2268,16 +2385,19 @@ function buildScanEvidenceReport(records) {
       languageModels: ['eng.traineddata.gz', 'fra.traineddata.gz'],
       recognitionEngineMode: 'LSTM (OEM 1)',
       pipeline: {
-        detectorPageSegmentationMode: 11,
-        refinementPageSegmentationMode: 6,
+        assetRotations: SERIAL_ROTATIONS,
+        assetPageSegmentationModes: SERIAL_PAGE_MODES,
+        assetAcceptConfidence: SERIAL_ACCEPT_CONFIDENCE,
+        nameDetectionPageSegmentationMode: 11,
+        nameRefinementPageSegmentationMode: 6,
         nameFallbackPageSegmentationMode: 7,
         nameFallbackMaxCandidates: 4,
+        nameAdaptivePreprocessingRetry: true,
+        nameRotations: [0],
         preprocessing: 'grayscale + global min/max contrast stretch',
-        maxLongSideBeforeCrop: 1800,
+        maxLongSideBeforeCrop: OCR_MAX_DIM,
         minLongSideAfterCrop: 700,
         maxUpscale: 4,
-        assetRotations: ROTATIONS,
-        nameRotations: [0],
         manualCropPageSegmentationMode: 6,
         manualCropAvailable: true,
         nameLowSharpnessAdviceThreshold: NAME_LOW_SHARPNESS_VARIANCE,
